@@ -18,6 +18,7 @@
   color:#4a4a4a;
   background:linear-gradient(135deg,var(--secondary-color),#011627);
   padding:8px 0;
+  padding-bottom:calc(70px + env(safe-area-inset-bottom)); /* room for sticky bar */
   overflow-x:hidden; /* prevent side-scroll on small screens */
 }
 #icdce ._wrap{
@@ -127,6 +128,16 @@
 }
 #icdce ._hint{font-size:12px;color:#6b7280;}
 
+/* Inline helpers */
+#icdce ._inline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+#icdce ._inline-wrap label{margin-right:12px;}
+#icdce ._inline-stack{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+#icdce ._badge{
+  display:inline-block;background:var(--secondary-color);color:#fff;
+  border:1px solid var(--border-color);border-radius:999px;padding:3px 8px;font-size:12px;
+}
+#icdce ._ticks{display:flex;justify-content:space-between;font-size:11px;color:#6b7280;margin-top:4px;}
+
 /* Inputs */
 #icdce ._input,
 #icdce select{
@@ -152,11 +163,6 @@
   background:#fff url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D'10'%20height%3D'10'%20viewBox%3D'0%200%2010%2010'%20xmlns%3D'http://www.w3.org/2000/svg'%3E%3Cpath%20d%3D'M0,3.3%20L5,8.3%20L10,3.3'%20fill%3D'%23001f3f'/%3E%3C/svg%3E") no-repeat right 10px center;
   background-size:10px;
 }
-
-/* Inline helpers */
-#icdce ._inline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
-#icdce ._inline-wrap label{margin-right:12px;}
-#icdce ._inline-stack{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
 
 /* Range (with colored fill) */
 #icdce input[type=range]{
@@ -184,6 +190,10 @@
 #icdce ._btn._good{background:linear-gradient(135deg,#34a853,#0c9d58);color:#fff;}
 #icdce ._btn:hover{opacity:.95;transform:translateY(-2px);}
 #icdce ._btn:active{transform:translateY(1px);box-shadow:0 2px 4px rgba(0,0,0,.2);}
+#icdce ._btn:focus-visible{
+  outline:3px solid rgba(26,115,232,.6);
+  outline-offset:2px;
+}
 #icdce ._actions{display:flex;gap:10px;flex-wrap:wrap;padding:18px 0;align-items:center;}
 #icdce ._actions-mobile{display:flex;gap:10px;flex-wrap:wrap;}
 
@@ -203,7 +213,7 @@
 #icdce ._results-title{margin:20px 0 10px;color:var(--secondary-color);}
 #icdce ._disclaimer{margin-top:12px;font-size:12px;color:#475569;line-height:1.5;}
 
-/* Table */
+/* Table (Line-Item Breakdown) */
 #icdce table{
   width:100%;
   border-collapse:separate;
@@ -212,24 +222,83 @@
   min-width:600px; /* keep columns readable; panel will scroll on small screens */
 }
 #icdce thead th{
-  position:sticky;top:0;background:var(--secondary-color);
-  text-align:left;padding:12px;color:#fff;border-bottom:1px solid var(--border-color);
+  position:sticky;
+  top:0;
+  z-index:1; /* keep above rows during scroll */
+  background:var(--secondary-color);
+  text-align:left;
+  padding:12px;
+  color:#fff;
+  border-bottom:1px solid var(--border-color);
 }
-#icdce tbody td{padding:10px 12px;border-bottom:1px solid #eef2f7;}
+#icdce tbody td{
+  padding:10px 12px;
+  border-bottom:1px solid #eef2f7;
+}
+#icdce table th,
+#icdce table td{
+  word-wrap:break-word;
+  overflow-wrap:anywhere; /* allow long text to break */
+}
 #icdce ._right{text-align:right;}
 #icdce ._muted{color:#6b7280;}
-#icdce ._badge{
-  display:inline-block;background:var(--secondary-color);color:#fff;
-  border:1px solid var(--border-color);border-radius:999px;padding:3px 8px;font-size:12px;
-}
-#icdce ._ticks{display:flex;justify-content:space-between;font-size:11px;color:#6b7280;margin-top:4px;}
 
 /* Table container scroll isolation */
-#icdce ._table-scroll{
+#icdce ._table-scroll,
+#icdce ._breakdown{
   border:1px solid var(--border-color);
   border-radius:12px;
-  overflow:auto;              /* both x and y as needed */
+  overflow:auto;                 /* both x and y as needed */
+  -webkit-overflow-scrolling:touch; /* smooth iOS scrolling */
   max-height:400px;
+}
+
+/* Sticky action bar (always visible on mobile & desktop) */
+#icdce ._stickybar{
+  position:sticky;
+  bottom:0;
+  z-index:50;
+  inset-inline:0;
+  display:flex;
+  gap:10px;
+  justify-content:space-between;
+  align-items:center;
+  padding:10px 12px;
+  background:rgba(255,255,255,.96);
+  backdrop-filter:saturate(1.2) blur(6px);
+  border-top:1px solid var(--border-color);
+  padding-bottom:calc(10px + env(safe-area-inset-bottom));
+}
+#icdce ._stickybar ._btn{flex:1 1 auto;}
+#icdce ._stickybar ._btn._good._unlocked{
+  box-shadow:0 0 0 2px rgba(52,168,83,.35) inset;
+}
+
+/* “Unlocked” toast */
+#icdce #icdce_unlocked{
+  position:fixed;
+  left:50%;
+  transform:translateX(-50%) translateY(10px);
+  top:10px;
+  z-index:60;
+  padding:10px 14px;
+  border-radius:999px;
+  background:#ecfdf5;
+  color:#065f46;
+  border:1px solid #a7f3d0;
+  font:500 14px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  display:none;
+  align-items:center;
+  gap:10px;
+  box-shadow:0 10px 20px rgba(0,0,0,.08);
+}
+#icdce #icdce_unlocked._show{
+  display:flex;
+  animation:slideDown .35s ease-out;
+}
+@keyframes slideDown{
+  from{ transform:translateX(-50%) translateY(-14px); opacity:0; }
+  to{   transform:translateX(-50%) translateY(10px);  opacity:1; }
 }
 
 /* Paywall modal */
@@ -237,7 +306,11 @@
   position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:9999;
 }
 #icdce ._modal{
-  width:min(520px,92vw);background:#fff;border-radius:14px;border:1px solid var(--border-color);box-shadow:0 20px 60px rgba(0,0,0,.2);
+  width:min(520px,92vw);
+  background:#fff;
+  border-radius:14px;
+  border:1px solid var(--border-color);
+  box-shadow:0 20px 60px rgba(0,0,0,.2);
   padding:20px;
 }
 #icdce ._modal h3{margin:0 0 6px;font-size:18px;color:#0b1320;}
@@ -271,4 +344,19 @@
   #icdce ._field._full{grid-column:1 / -1;}
   /* Smaller tick labels */
   #icdce ._ticks{font-size:10px;}
+}
+
+/* Ultra-small phones: slightly tighter table */
+@media (max-width:360px){
+  #icdce table{min-width:520px;}
+  #icdce table th._right,
+  #icdce table td._right{width:80px;}
+}
+
+/* Optional: scrollbar styling for table area (WebKit) */
+#icdce ._table-scroll::-webkit-scrollbar,
+#icdce ._breakdown::-webkit-scrollbar{height:10px;}
+#icdce ._table-scroll::-webkit-scrollbar-thumb,
+#icdce ._breakdown::-webkit-scrollbar-thumb{
+  background:#cbd5e1;border-radius:6px;
 }
