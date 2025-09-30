@@ -2,10 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ICD Cost Estimator™</title>
 
-  <!-- Your external CSS (no <style> tags in the file itself) -->
+  <!-- Site meta (optional but nice) -->
+  <meta name="description" content="Planning-level budgeting tool for Insulated Concrete Domes (ICD). All client-side; no data leaves your browser." />
+  <meta name="theme-color" content="#001f3f" />
+
+  <!-- External CSS -->
   <link rel="stylesheet" href="./icdce.css" />
 </head>
 <body>
@@ -26,13 +30,13 @@
           <h2 class="_sectionTitle">Project Basics</h2>
           <div class="_grid">
             <div class="_field">
-              <label class="_label">Conditioned SF</label>
+              <label class="_label" for="ce_sf">Conditioned SF</label>
               <input id="ce_sf" class="_input" type="number" min="0" step="50" placeholder="e.g., 2000" />
               <div class="_hint">Total conditioned square footage.</div>
             </div>
 
             <div class="_field">
-              <label class="_label">Region</label>
+              <label class="_label" for="ce_region">Region</label>
               <select id="ce_region" class="_input">
                 <option value="1.00">Standard (1.00)</option>
                 <option value="0.90">Low-cost (0.90)</option>
@@ -43,7 +47,7 @@
             </div>
 
             <div class="_field _wide">
-              <label class="_label">Region Cost Index (fine-tune)</label>
+              <label class="_label" for="ce_regionIdx">Region Cost Index (fine-tune)</label>
               <div class="_inline">
                 <input id="ce_regionIdx" class="_input" type="range" min="0.80" max="1.40" step="0.01" value="1.00" list="ce_regionTicks" />
                 <span class="_badge" id="ce_regionIdxVal">1.00</span>
@@ -57,7 +61,7 @@
             </div>
 
             <div class="_field">
-              <label class="_label">Dome Diameter (ft)</label>
+              <label class="_label" for="ce_diameter">Dome Diameter (ft)</label>
               <input id="ce_diameter" class="_input" type="number" min="20" step="1" placeholder="e.g., 50" />
               <div class="_hint">Used for planning-level checks.</div>
             </div>
@@ -69,7 +73,7 @@
           <h2 class="_sectionTitle">Design &amp; Envelope</h2>
           <div class="_grid">
             <div class="_field">
-              <label class="_label">Finish Level</label>
+              <label class="_label" for="ce_finish">Finish Level</label>
               <select id="ce_finish" class="_input">
                 <option value="0.95">Basic (durable &amp; simple)</option>
                 <option value="1.00" selected>Standard (balanced)</option>
@@ -80,7 +84,7 @@
             </div>
 
             <div class="_field">
-              <label class="_label"># of Domes</label>
+              <label class="_label" for="ce_domes"># of Domes</label>
               <select id="ce_domes" class="_input">
                 <option value="1">1 (single)</option>
                 <option value="2">2 (compound)</option>
@@ -90,7 +94,7 @@
             </div>
 
             <div class="_field">
-              <label class="_label">Shell Height</label>
+              <label class="_label" for="ce_height">Shell Height</label>
               <select id="ce_height" class="_input">
                 <option value="std">Standard</option>
                 <option value="tall">Tall (+ loft potential)</option>
@@ -99,7 +103,7 @@
             </div>
 
             <div class="_field">
-              <label class="_label">Glazing % of Envelope</label>
+              <label class="_label" for="ce_glazing">Glazing % of Envelope</label>
               <select id="ce_glazing" class="_input">
                 <option value="0.10">~10% (minimal)</option>
                 <option value="0.20" selected>~20% (typical)</option>
@@ -110,7 +114,7 @@
             </div>
 
             <div class="_field">
-              <label class="_label">Basement</label>
+              <label class="_label" for="ce_basement">Basement</label>
               <select id="ce_basement" class="_input">
                 <option value="none">None (slab)</option>
                 <option value="partial">Partial</option>
@@ -120,7 +124,7 @@
             </div>
 
             <div class="_field">
-              <label class="_label">Shell Concrete Thickness (inches)</label>
+              <label class="_label" for="ce_shellThk">Shell Concrete Thickness (inches)</label>
               <select id="ce_shellThk" class="_input">
                 <option value="4">4″ (standard)</option>
                 <option value="5">5″</option>
@@ -130,7 +134,7 @@
             </div>
 
             <div class="_field">
-              <label class="_label">Shotcrete / Mix Type</label>
+              <label class="_label" for="ce_mixType">Shotcrete / Mix Type</label>
               <select id="ce_mixType" class="_input">
                 <option value="std">Standard Portland</option>
                 <option value="pozz">Pozzolan (volcanic ash) blend</option>
@@ -140,12 +144,12 @@
             </div>
 
             <div class="_field">
-              <label class="_label">Oculus / Skylight Count</label>
+              <label class="_label" for="ce_oculusCount">Oculus / Skylight Count</label>
               <input id="ce_oculusCount" class="_input" type="number" min="0" step="1" value="0" />
             </div>
 
             <div class="_field">
-              <label class="_label">Connector / Tunnel</label>
+              <label class="_label" for="ce_connector">Connector / Tunnel</label>
               <select id="ce_connector" class="_input">
                 <option value="none">None</option>
                 <option value="short">Short (≤10 ft)</option>
@@ -161,7 +165,7 @@
           <h2 class="_sectionTitle">Site &amp; Systems</h2>
           <div class="_grid">
             <div class="_field">
-              <label class="_label">Bathrooms</label>
+              <label class="_label" for="ce_baths">Bathrooms</label>
               <select id="ce_baths" class="_input">
                 <option value="1">1 bath</option>
                 <option value="2" selected>2 baths</option>
@@ -173,7 +177,7 @@
             </div>
 
             <div class="_field">
-              <label class="_label">Site Difficulty</label>
+              <label class="_label" for="ce_site">Site Difficulty</label>
               <select id="ce_site" class="_input">
                 <option value="flat">Flat &amp; clear</option>
                 <option value="moderate">Moderate slopes/trees</option>
@@ -183,7 +187,7 @@
             </div>
 
             <div class="_field">
-              <label class="_label">MEP Complexity</label>
+              <label class="_label" for="ce_mep">MEP Complexity</label>
               <select id="ce_mep" class="_input">
                 <option value="simple">Simple</option>
                 <option value="standard" selected>Standard</option>
@@ -193,7 +197,7 @@
             </div>
 
             <div class="_field">
-              <label class="_label">Remoteness / Access</label>
+              <label class="_label" for="ce_remote">Remoteness / Access</label>
               <select id="ce_remote" class="_input">
                 <option value="easy">Easy (paved &amp; close)</option>
                 <option value="moderate">Moderate</option>
@@ -202,7 +206,7 @@
             </div>
 
             <div class="_field">
-              <label class="_label">Inflation Power</label>
+              <label class="_label" for="ce_inflationPower">Inflation Power</label>
               <select id="ce_inflationPower" class="_input">
                 <option value="onsite">On-site power</option>
                 <option value="generator">Generator</option>
@@ -210,7 +214,7 @@
             </div>
 
             <div class="_field _wide">
-              <label class="_label">Include Sitework &amp; Rough Grading</label>
+              <label class="_label" for="ce_incSitework">Include Sitework &amp; Rough Grading</label>
               <div class="_inline">
                 <input type="checkbox" id="ce_incSitework" />
                 <span>Include sitework in estimate</span>
@@ -255,7 +259,7 @@
           <h2 class="_sectionTitle">Contingency</h2>
           <div class="_grid">
             <div class="_field">
-              <label class="_label">Contingency %</label>
+              <label class="_label" for="ce_contPct">Contingency %</label>
               <input id="ce_contPct" class="_input" type="number" min="0" max="100" step="0.1" value="10" />
               <div class="_hint">Common planning allowance is 5–15% depending on risk.</div>
             </div>
@@ -327,7 +331,7 @@
         <h3 id="pw_title">Export PDF</h3>
         <p>Exporting a formatted, two-page PDF is a paid feature. Complete checkout and you’ll be returned here automatically.</p>
         <div class="_row">
-          <button id="pw_payBtn" class="_btn _good">Go to Checkout</button>
+          <button id="pw_payBtn" class="_btn _good" type="button">Go to Checkout</button>
           <button id="pw_closeBtn" class="_btn _secondary" type="button">Close</button>
         </div>
         <hr style="border:none;border-top:1px solid #e5e7eb;margin:14px 0;">
@@ -348,3 +352,4 @@
   <noscript>Please enable JavaScript to use the ICD Cost Estimator.</noscript>
 </body>
 </html>
+
