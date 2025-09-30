@@ -20,9 +20,7 @@
       border-top:1px solid var(--border-color);
     }
     #icdce ._stickybar ._btn{ flex:1 1 auto; }
-    #icdce ._stickybar ._btn._good._unlocked{
-      box-shadow:0 0 0 2px rgba(52,168,83,.35) inset;
-    }
+    #icdce ._stickybar ._btn._good._unlocked{ box-shadow:0 0 0 2px rgba(52,168,83,.35) inset; }
 
     /* Little “unlocked” toast */
     #icdce #icdce_unlocked{
@@ -38,7 +36,7 @@
       to{ transform:translateX(-50%) translateY(10px); opacity:1; }
     }
 
-    /* Make option rows friendlier on phones */
+    /* Phone-friendly option rows */
     ._inline._inline-wrap label{ margin-right:8px; }
     ._inline._inline-stack{ flex-direction:column; align-items:flex-start; }
   </style>
@@ -47,7 +45,6 @@
   <div id="icdce">
     <!-- Unlock toast (auto shown after Stripe success) -->
     <div id="icdce_unlocked" aria-live="polite" role="status">
-      <!-- simple checkmark -->
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M20 6L9 17l-5-5" stroke="#065f46" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
@@ -338,7 +335,8 @@
           </div>
 
           <h3 class="_results-title">Line-Item Breakdown</h3>
-          <div class="_panel _breakdown">
+          <!-- NOTE: _table-scroll added for mobile horizontal scroll -->
+          <div class="_panel _breakdown _table-scroll" role="region" aria-label="Cost breakdown table">
             <table>
               <thead>
                 <tr>
@@ -399,25 +397,21 @@
   <!-- Tiny helper: show “unlocked” toast + highlight Export button after Stripe return -->
   <script>
     document.addEventListener('DOMContentLoaded', function () {
-      // IMPORTANT: this must match STORE_KEY in icdce.js
+      // IMPORTANT: must match STORE_KEY in icdce.js
       var STORE_KEY = 'icdce_paid_test1d';
-
       try {
         var unlocked = (localStorage.getItem(STORE_KEY) === 'yes');
         if (unlocked) {
-          // Show toast
           var toast = document.getElementById('icdce_unlocked');
           if (toast) {
             toast.classList.add('_show');
             setTimeout(function(){ toast.classList.remove('_show'); }, 4200);
           }
-          // Subtle highlight on sticky Export
           var quick = document.getElementById('icdce_export_quick');
           if (quick) {
             quick.classList.add('_unlocked');
             setTimeout(function(){ quick.classList.remove('_unlocked'); }, 5000);
           }
-          // Ensure quick action bar is in view (in case user is mid-page)
           var sticky = document.getElementById('icdce_sticky');
           if (sticky && sticky.scrollIntoView) {
             sticky.scrollIntoView({ behavior: 'smooth', block: 'end' });
