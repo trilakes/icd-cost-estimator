@@ -1,6 +1,6 @@
 /* ===== ICD Cost Estimator — Contingency-only, colored slider, PDF, Paywall ===== */
 document.addEventListener('DOMContentLoaded', function () {
-  /* ---------- Small utilities ---------- */
+  /* ---------- Small utility ---------- */
   function whenReady(ids, cb, attempts = 20) {
     const els = ids.map(id => document.getElementById(id));
     if (els.every(Boolean)) { cb.apply(null, els); return; }
@@ -8,162 +8,147 @@ document.addEventListener('DOMContentLoaded', function () {
     setTimeout(function () { whenReady(ids, cb, attempts - 1); }, 100);
   }
   function $(id) { return document.getElementById(id); }
-  function tryJSON(fn, fallback) { try { return fn(); } catch (_) { return fallback; } }
 
-  /* ---------- Paywall / Persistence Config (edit these) ---------- */
-  // Your Stripe Payment Link (no params added here)
-  const PAY_URL = 'https://buy.stripe.com/4gMdR95Gl9cdddLch09MY00';
-  // Stripe should return users to this page with ?paid=1 (configure in Stripe Payment Link settings)
-  const SUCCESS_PARAM = 'paid';
-  // Optional access code for manual unlock; set '' to disable
-  const ACCESS_CODE = 'FREE99';
-  // localStorage keys
-  const STORE_KEY_PAID   = 'icdce_paid_test1d';
-  const STORE_KEY_INPUTS = 'icdce_inputs_v1';
+  /* ---------- Paywall Config (edit these) ---------- */
+  const PAY_URL = 'https://buy.stripe.com/4gMdR95Gl9cdddLch09MY00'; // your Stripe payment link
+  const SUCCESS_PARAM = 'paid';           // look for ?paid=1 or ?paid=true on return
+  const ACCESS_CODE = 'FREE99';           // set '' to disable manual code
+  const STORE_KEY  = 'icdce_paid_test1d'; // remember paywall unlock on this domain
+
+  /* ---------- State persistence (keeps inputs across Stripe return) ---------- */
+  const STATE_KEY = 'icdce_state_v1';
+
+  function persistInputs(inp) {
+    try { localStorage.setItem(STATE_KEY, JSON.stringify(inp)); } catch (_) {}
+  }
+  function readInputsFromStore() {
+    try {
+      const s = localStorage.getItem(STATE_KEY);
+      return s ? JSON.parse(s) : null;
+    } catch (_) { return null; }
+  }
+  function clearInputsStore() {
+    try { localStorage.removeItem(STATE_KEY); } catch (_) {}
+  }
+
+  function fillFormFromInputs(inp) {
+    if (!inp) return;
+    function setVal(id, val) { const el = $(id); if (el) el.value = String(val); }
+    function setCheck(id, v) { const el = $(id); if (el) el.checked = !!v; }
+
+    setVal('ce_sf', inp.sf ?? '');
+    setVal('ce_region', inp.regionPreset ?? '1.00');
+    setVal('ce_regionIdx', inp.regionIdx ?? '1.00');
+    setVal('ce_finish', inp.finish ?? '1.00');
+    setVal('ce_domes', inp.domes ?? '1');
+    setVal('ce_height', inp.height ?? 'std');
+    setVal('ce_glazing', inp.glazing ?? '0.20');
+    setVal('ce_basement', inp.basement ?? 'none');
+    setVal('ce_site', inp.site ?? 'flat');
+    setVal('ce_mep', inp.mep ?? 'standard');
+    setVal('ce_baths', inp.baths ?? '2');
+    setCheck('ce_incSitework', !!inp.includeSitework);
+
+    setCheck('ce_optSolar',   inp?.opts?.solar);
+    setCheck('ce_optStorage', inp?.opts?.storage);
+    setCheck('ce_optGeo',     inp?.opts?.geo);
+    setCheck('ce_optRain',    inp?.opts?.rain);
+    setCheck('ce_optSeptic',  inp?.opts?.septic);
+    setCheck('ce_optHydronic',inp?.opts?.hydronic);
+    setCheck('ce_optDriveway',inp?.opts?.driveway);
+
+    setVal('ce_driveLen', inp.drivewayLen ?? 0);
+    setVal('ce_contPct',  (inp.contPct ?? 0.10) * 100);
+
+    setVal('ce_diameter', inp.diameter ?? '');
+    setVal('ce_shellThk', inp.shellThk ?? 4);
+    setVal('ce_mixType',  inp.mixType  ?? 'std');
+    setVal('ce_oculusCount', inp.oculusCount ?? 0);
+    setVal('ce_connector',   inp.connector   ?? 'none');
+    setVal('ce_remote',      inp.remote      ?? 'easy');
+    setVal('ce_inflationPower', inp.inflationPower ?? 'onsite');
+    setCheck('ce_lightning', inp.lightning);
+
+    updateRegionIdxBadge();
+    updateRangeFill($('ce_regionIdx'));
+    toggleDrivewayInputs();
+  }
 
   /* ---------- Paywall helpers ---------- */
-  function isPaid() { return tryJSON(() => localStorage.getItem(STORE_KEY_PAID) === 'yes', false); }
-  function setPaid() { tryJSON(() => localStorage.setItem(STORE_KEY_PAID, 'yes')); }
-  function clearPaid() { tryJSON(() => localStorage.removeItem(STORE_KEY_PAID)); }
+  function isPaid() { try { return localStorage.getItem(STORE_KEY) === 'yes'; } catch (_) { return false; } }
+  function setPaid() { try { localStorage.setItem(STORE_KEY, 'yes'); } catch (_) {} }
+  function clearPaid() { try { localStorage.removeItem(STORE_KEY); } catch (_) {} }
 
-  // Restore saved inputs (if any)
-  function loadSavedInputs() {
-    return tryJSON(() => JSON.parse(localStorage.getItem(STORE_KEY_INPUTS) || 'null'), null);
-  }
-  function saveInputs(inp) {
-    tryJSON(() => localStorage.setItem(STORE_KEY_INPUTS, JSON.stringify(inp)));
-  }
-
-  // If redirected back with ?paid=1/true → mark paid and clean URL (but do NOT clear saved inputs)
-  (function checkPaidReturn() {
-    const usp = new URLSearchParams(window.location.search || '');
-    const val = usp.get(SUCCESS_PARAM);
-    if (val === '1' || val === 'true') {
-      setPaid();
-      // Clean the URL so refreshing doesn’t keep re-triggering this
-      if (history && history.replaceState) {
-        usp.delete(SUCCESS_PARAM);
-        const clean = window.location.pathname + (usp.toString() ? '?' + usp.toString() : '');
-        history.replaceState({}, document.title, clean);
+  // Try to navigate out of iframes/sandboxes safely so Stripe opens reliably.
+  function safeRedirect(url) {
+    // 1) Try top window (common case for site builders / GoDaddy)
+    try {
+      if (window.top && window.top !== window.self) {
+        window.top.location.href = url;
+        return;
       }
-    }
-  })();
+    } catch (_) { /* cross-origin access blocked */ }
 
-  // Improved paywall navigation with layered fallbacks (top nav, new tab, anchor click, same-frame)
-  function openPaywall() {
-    const el = $('icdce_paywall');
-    if (el) {
-      // If a local paywall modal exists in the page, show it. That is the preferred UX.
-      el.style.display = 'flex';
-      el.setAttribute('aria-hidden', 'false');
+    // 2) Same-frame navigation
+    try {
+      window.location.assign(url);
       return;
-    }
+    } catch (_) {}
 
-    // No in-page modal available — attempt to navigate to the Stripe payment link.
-    // Many site builders (GoDaddy preview/editor) load pages in sandboxed iframes which block
-    // top-level navigation or window.open. We'll try a few strategies in order and fall back to
-    // a user-visible message if none succeed.
+    // 3) Programmatic anchor to _top (works in some sandboxed cases)
     try {
-      // 1) Try top-level navigation (best for regular sites)
-      (window.top || window).location.assign(PAY_URL);
-      return;
-    } catch (e) {
-      console.warn('Top navigation to checkout blocked, trying fallbacks', e);
-    }
-
-    try {
-      // 2) Try opening a new tab/window (should be allowed when invoked by a user click)
-      var w = window.open(PAY_URL, '_blank', 'noopener');
-      if (w) { try { w.focus(); } catch (_) {} ; return; }
-    } catch (e) {
-      console.warn('window.open to checkout blocked', e);
-    }
-
-    try {
-      // 3) Anchor click fallback (programmatic click on an <a target="_blank">)
-      var a = document.createElement('a');
-      a.href = PAY_URL;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      a.style.display = 'none';
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_top';
+      a.rel = 'noopener';
       document.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
+      a.remove();
       return;
-    } catch (e) {
-      console.warn('Anchor click to checkout blocked', e);
-    }
+    } catch (_) {}
 
-    try {
-      // 4) Last resort: navigate the current frame (may be allowed when others are blocked)
-      window.location.href = PAY_URL;
-      return;
-    } catch (e) {
-      console.warn('Fallback current-frame navigation blocked', e);
-    }
-
-    // If everything is blocked (common in sandboxed preview iframes), inform the user with an explicit link
-    try {
-      alert('Could not open the checkout window automatically (this can happen in site editors or sandboxed previews). Please open this link in a new tab to complete payment:\n\n' + PAY_URL);
-    } catch (e) {
-      // If even alert is blocked, put link on console
-      console.error('Could not open checkout automatically. Please visit: ' + PAY_URL);
-    }
+    // 4) Last resort: new tab (user may need to allow popups)
+    const w = window.open(url, '_blank', 'noopener');
+    if (!w) alert('Please allow pop-ups to continue to checkout.');
   }
 
+  // If redirected back with ?paid=1/true → mark paid, clean URL, and restore inputs
+  (function checkPaidReturn() {
+    try {
+      const usp = new URLSearchParams(window.location.search);
+      const val = usp.get(SUCCESS_PARAM);
+      if (val === '1' || val === 'true') {
+        setPaid();
+        // Clean URL
+        if (history && history.replaceState) {
+          usp.delete(SUCCESS_PARAM);
+          const clean = window.location.pathname + (usp.toString() ? '?' + usp.toString() : '');
+          history.replaceState({}, document.title, clean);
+        }
+        // Restore inputs (if we saved them before leaving)
+        const saved = readInputsFromStore();
+        if (saved) fillFormFromInputs(saved);
+      }
+    } catch (e) { /* ignore */ }
+  })();
+
+  function openPaywall() {
+    const el = $('icdce_paywall');
+    if (!el) { safeRedirect(PAY_URL); return; } // graceful fallback
+    el.style.display = 'flex';
+    el.setAttribute('aria-hidden', 'false');
+  }
   function closePaywall() {
     const el = $('icdce_paywall');
     if (!el) return;
     el.style.display = 'none';
     el.setAttribute('aria-hidden', 'true');
   }
-
   function gotoCheckout() {
-    // Save current inputs before leaving so we can restore after return
+    // Save current inputs so we can restore on return
     const inp = getInputs();
-    if (inp && (inp.sf || 0) > 0) saveInputs(inp);
-
-    // Use same robust navigation strategy as openPaywall (so checkout works even inside builders)
-    try {
-      (window.top || window).location.assign(PAY_URL);
-      return;
-    } catch (e) {
-      console.warn('Top navigation blocked in gotoCheckout', e);
-    }
-
-    try {
-      var w = window.open(PAY_URL, '_blank', 'noopener');
-      if (w) { try { w.focus(); } catch (_) {} ; return; }
-    } catch (e) {
-      console.warn('window.open blocked in gotoCheckout', e);
-    }
-
-    try {
-      var a = document.createElement('a');
-      a.href = PAY_URL;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      return;
-    } catch (e) {
-      console.warn('Anchor click blocked in gotoCheckout', e);
-    }
-
-    try {
-      window.location.href = PAY_URL;
-      return;
-    } catch (e) {
-      console.warn('Final fallback navigation blocked in gotoCheckout', e);
-    }
-
-    try {
-      alert('Could not open checkout automatically. Please open this link in a new tab to complete payment:\n\n' + PAY_URL);
-    } catch (e) {
-      console.error('Could not open checkout. Please visit: ' + PAY_URL);
-    }
+    if (inp && inp.sf > 0) persistInputs(inp);
+    safeRedirect(PAY_URL);
   }
 
   /* ---------- Estimator Config & Helpers ---------- */
@@ -271,50 +256,6 @@ document.addEventListener('DOMContentLoaded', function () {
     };
   }
 
-  function setInputs(inp) {
-    // Populate UI controls from a saved input object
-    if (!inp) return;
-    function setVal(id, val) { const el = $(id); if (el) el.value = val; }
-    function setChk(id, val) { const el = $(id); if (el) el.checked = !!val; }
-
-    setVal('ce_sf', inp.sf);
-    setVal('ce_region', String(inp.regionPreset || 1));
-    setVal('ce_regionIdx', String(inp.regionIdx || 1));
-    setVal('ce_finish', String(inp.finish || 1));
-    setVal('ce_domes', inp.domes || '1');
-    setVal('ce_height', inp.height || 'std');
-    setVal('ce_glazing', String(inp.glazing || 0.2));
-    setVal('ce_basement', inp.basement || 'none');
-    setVal('ce_site', inp.site || 'flat');
-    setVal('ce_mep', inp.mep || 'standard');
-    setVal('ce_baths', String(inp.baths || 2));
-    setChk('ce_incSitework', inp.includeSitework);
-    if (inp.opts) {
-      setChk('ce_optSolar', inp.opts.solar);
-      setChk('ce_optStorage', inp.opts.storage);
-      setChk('ce_optGeo', inp.opts.geo);
-      setChk('ce_optRain', inp.opts.rain);
-      setChk('ce_optSeptic', inp.opts.septic);
-      setChk('ce_optHydronic', inp.opts.hydronic);
-      setChk('ce_optDriveway', inp.opts.driveway);
-    }
-    setVal('ce_driveLen', String(inp.drivewayLen || 0));
-    setVal('ce_contPct', String(Math.round((inp.contPct || 0.10) * 1000) / 10));
-    setVal('ce_diameter', String(inp.diameter || 0));
-    setVal('ce_shellThk', String(inp.shellThk || 4));
-    setVal('ce_mixType', inp.mixType || 'std');
-    setVal('ce_oculusCount', String(inp.oculusCount || 0));
-    setVal('ce_connector', inp.connector || 'none');
-    setVal('ce_remote', inp.remote || 'easy');
-    setVal('ce_inflationPower', inp.inflationPower || 'onsite');
-    setChk('ce_lightning', inp.lightning);
-
-    // Visual helpers
-    updateRangeFill($('ce_regionIdx'));
-    updateRegionIdxBadge();
-    toggleDrivewayInputs();
-  }
-
   function bathFactors(inp) {
     var expected = Math.max(1, Math.round((inp.sf || 0) / 900));
     var delta = (inp.baths || expected) - expected;
@@ -399,16 +340,16 @@ document.addEventListener('DOMContentLoaded', function () {
     var items = [];
 
     // PRE-CONSTRUCTION
-    var a = psf(I.designDocsPSF); items.push({ cat: "Pre-Construction", name: "Design & Construction Documents", desc: "Full architecture/engineering and coordinated construction drawings", low: a[0] [...]
-    var b = psf(I.permitsFeesPSF); items.push({ cat: "Pre-Construction", name: "Permits & Agency Fees", desc: "Plan review, building permit, utility/tap fees where applicable", low: b[0] * inp.sf, hig[...]
-    var c = lump(I.surveyGeotechLump, siteMultItems); items.push({ cat: "Pre-Construction", name: "Survey & Geotechnical", desc: "Boundary/topographic survey and geotechnical (soils) report", low: c[0[...]
-    var d = lump(I.mobilizationLump, siteMultItems); items.push({ cat: "Pre-Construction", name: "Mobilization", desc: "Staging, temporary power/water, delivery logistics setup", low: d[0], high: d[1][...]
+    var a = psf(I.designDocsPSF); items.push({ cat: "Pre-Construction", name: "Design & Construction Documents", desc: "Full architecture/engineering and coordinated construction drawings", low: a[0] * inp.sf, high: a[1] * inp.sf });
+    var b = psf(I.permitsFeesPSF); items.push({ cat: "Pre-Construction", name: "Permits & Agency Fees", desc: "Plan review, building permit, utility/tap fees where applicable", low: b[0] * inp.sf, high: b[1] * inp.sf });
+    var c = lump(I.surveyGeotechLump, siteMultItems); items.push({ cat: "Pre-Construction", name: "Survey & Geotechnical", desc: "Boundary/topographic survey and geotechnical (soils) report", low: c[0], high: c[1] });
+    var d = lump(I.mobilizationLump, siteMultItems); items.push({ cat: "Pre-Construction", name: "Mobilization", desc: "Staging, temporary power/water, delivery logistics setup", low: d[0], high: d[1] });
 
     // SITE & FOUNDATION (non-shell)
     var siteworkPSF = psfSite(I.siteworkPSF);
     var siteworkLow = inp.includeSitework ? siteworkPSF[0] * inp.sf : 0;
     var siteworkHigh = inp.includeSitework ? siteworkPSF[1] * inp.sf : 0;
-    items.push({ cat: "Site & Foundation", name: "Sitework & Rough Grading", desc: (inp.includeSitework ? "Clearing, rough grading, temporary access, erosion control" : "Excluded (by owner/others)"), [...]
+    items.push({ cat: "Site & Foundation", name: "Sitework & Rough Grading", desc: (inp.includeSitework ? "Clearing, rough grading, temporary access, erosion control" : "Excluded (by owner/others)"), low: siteworkLow, high: siteworkHigh });
 
     b = psfSite(I.utilitiesStubPSF); b[0] *= bf.bathUF; b[1] *= bf.bathUF;
     items.push({ cat: "Site & Foundation", name: "Utilities Stub-ins", desc: "Trenching and laterals for water/septic/electric to the shell", low: b[0] * inp.sf, high: b[1] * inp.sf });
@@ -416,19 +357,19 @@ document.addEventListener('DOMContentLoaded', function () {
     var f = psfSite(I.foundationPSF);
     items.push({ cat: "Site & Foundation", name: "Foundation / Slab / Footings", desc: "Footings, slab, anchors — basement costs shown separately", low: f[0] * inp.sf, high: f[1] * inp.sf });
 
-    items.push({ cat: "Site & Foundation", name: "Basement", desc: inp.basement === 'none' ? 'None (slab only)' : inp.basement === 'partial' ? 'Partial (~50% footprint)' : 'Full (~100% footprint)', lo[...]
+    items.push({ cat: "Site & Foundation", name: "Basement", desc: inp.basement === 'none' ? 'None (slab only)' : inp.basement === 'partial' ? 'Partial (~50% footprint)' : 'Full (~100% footprint)', low: basementLow, high: basementHigh });
 
     // CORE STRUCTURE (shell)
-    items.push({ cat: "Core Structure", name: "Base Dome Shell (Airform, Foam, Rebar, Shotcrete)", desc: "Airform membrane, spray foam insulation, rebar, shotcrete structural shell (multipliers: regio[...]
+    items.push({ cat: "Core Structure", name: "Base Dome Shell (Airform, Foam, Rebar, Shotcrete)", desc: "Airform membrane, spray foam insulation, rebar, shotcrete structural shell (multipliers: region/domes/height/site)", low: structureCost, high: structureCost });
 
     if (inp.oculusCount > 0) {
       var oculus = lump(I.oculusCurbLumpPerEa);
-      items.push({ cat: "Core Structure", name: "Oculus/Skylights Curbs", desc: inp.oculusCount + " unit" + (inp.oculusCount === 1 ? "" : "s"), low: oculus[0] * inp.oculusCount, high: oculus[1] * inp.[...]
+      items.push({ cat: "Core Structure", name: "Oculus/Skylights Curbs", desc: inp.oculusCount + " unit" + (inp.oculusCount === 1 ? "" : "s"), low: oculus[0] * inp.oculusCount, high: oculus[1] * inp.oculusCount });
     }
     if (inp.connector !== "none") {
       var connectorLump = inp.connector === "short" ? I.connectorShellShort : inp.connector === "med" ? I.connectorShellMed : I.connectorShellLong;
       var connectorCost = lump(connectorLump);
-      items.push({ cat: "Core Structure", name: "Connector / Tunnel (Shell)", desc: inp.connector.charAt(0).toUpperCase() + inp.connector.slice(1) + " connector", low: connectorCost[0], high: connecto[...]
+      items.push({ cat: "Core Structure", name: "Connector / Tunnel (Shell)", desc: inp.connector.charAt(0).toUpperCase() + inp.connector.slice(1) + " connector", low: connectorCost[0], high: connectorCost[1] });
     }
 
     // EXTERIOR
@@ -436,22 +377,22 @@ document.addEventListener('DOMContentLoaded', function () {
     items.push({ cat: "Exterior", name: "Exterior Finishes / Coatings", desc: "Membrane topcoat/paint and trims at shell openings", low: a[0] * inp.sf, high: a[1] * inp.sf });
     var transWp = lump(I.transitionWaterproofLump);
     items.push({ cat: "Exterior", name: "Transition Waterproofing at Openings", desc: "Waterproofing transitions around openings", low: transWp[0], high: transWp[1] });
-    items.push({ cat: "Exterior", name: "Windows & Glazed Openings", desc: (inp.glazing * 100).toFixed(0) + "% of shell surface @ $" + (CONFIG.glazingCostPerSF[inp.glazing] || 0) + "/SF", low: glazing[...]
+    items.push({ cat: "Exterior", name: "Windows & Glazed Openings", desc: (inp.glazing * 100).toFixed(0) + "% of shell surface @ $" + (CONFIG.glazingCostPerSF[inp.glazing] || 0) + "/SF", low: glazingCost, high: glazingCost });
 
     // INTERIORS
-    a = psfFinish(I.interiorFramingPSF); items.push({ cat: "Interiors", name: "Interior Framing & Partitions", desc: "Non-structural partitions and basic framing details", low: a[0] * inp.sf, high: a[[...]
-    b = psfFinish(I.insulDrywallPSF); items.push({ cat: "Interiors", name: "Insulation & Drywall", desc: "Thermal/sound insulation plus drywall hang, tape and texture", low: b[0] * inp.sf, high: b[1] [...]
-    c = psfFinish(I.flooringFinishesPSF); items.push({ cat: "Interiors", name: "Flooring & Interior Finishes", desc: "LVT/tile/carpet, interior paint and finish carpentry", low: c[0] * inp.sf, high: c[...]
-    d = psfFinish(I.millworkDoorsPSF); items.push({ cat: "Interiors", name: "Millwork, Interior Doors & Trim", desc: "Interior doors, casing/base, basic built-ins/shelving", low: d[0] * inp.sf, high: d[...]
+    a = psfFinish(I.interiorFramingPSF); items.push({ cat: "Interiors", name: "Interior Framing & Partitions", desc: "Non-structural partitions and basic framing details", low: a[0] * inp.sf, high: a[1] * inp.sf });
+    b = psfFinish(I.insulDrywallPSF); items.push({ cat: "Interiors", name: "Insulation & Drywall", desc: "Thermal/sound insulation plus drywall hang, tape and texture", low: b[0] * inp.sf, high: b[1] * inp.sf });
+    c = psfFinish(I.flooringFinishesPSF); items.push({ cat: "Interiors", name: "Flooring & Interior Finishes", desc: "LVT/tile/carpet, interior paint and finish carpentry", low: c[0] * inp.sf, high: c[1] * inp.sf });
+    d = psfFinish(I.millworkDoorsPSF); items.push({ cat: "Interiors", name: "Millwork, Interior Doors & Trim", desc: "Interior doors, casing/base, basic built-ins/shelving", low: d[0] * inp.sf, high: d[1] * inp.sf });
 
     // SYSTEMS (MEP)
-    a = psfMEP(I.plumbingPSF); a[0] *= bf.bathPF; a[1] *= bf.bathPF; items.push({ cat: "Systems (MEP)", name: "Plumbing (rough-in + fixtures)", desc: "Supply/drain/vent, water heater and standard plum[...]
-    b = psfMEP(I.electricalPSF); b[0] *= bf.bathPF; b[1] *= bf.bathPF; items.push({ cat: "Systems (MEP)", name: "Electrical (rough-in + devices)", desc: "Service/panels, branch circuits, devices and l[...]
-    c = psfMEP(I.hvacPSF); items.push({ cat: "Systems (MEP)", name: "HVAC / Mechanical", desc: "Heat pump/furnace/air handler and distribution (ducted/ductless)", low: c[0] * inp.sf, high: c[1] * inp.[...]
-    d = psfMEP(I.specialSystemsPSF); d[0] *= bf.bathSF; d[1] *= bf.bathSF; items.push({ cat: "Systems (MEP)", name: "Special Systems", desc: "ERV/HRV, simple controls and minor low-voltage allowances"[...]
+    a = psfMEP(I.plumbingPSF); a[0] *= bf.bathPF; a[1] *= bf.bathPF; items.push({ cat: "Systems (MEP)", name: "Plumbing (rough-in + fixtures)", desc: "Supply/drain/vent, water heater and standard plumbing fixtures", low: a[0] * inp.sf, high: a[1] * inp.sf });
+    b = psfMEP(I.electricalPSF); b[0] *= bf.bathPF; b[1] *= bf.bathPF; items.push({ cat: "Systems (MEP)", name: "Electrical (rough-in + devices)", desc: "Service/panels, branch circuits, devices and light fixtures", low: b[0] * inp.sf, high: b[1] * inp.sf });
+    c = psfMEP(I.hvacPSF); items.push({ cat: "Systems (MEP)", name: "HVAC / Mechanical", desc: "Heat pump/furnace/air handler and distribution (ducted/ductless)", low: c[0] * inp.sf, high: c[1] * inp.sf });
+    d = psfMEP(I.specialSystemsPSF); d[0] *= bf.bathSF; d[1] *= bf.bathSF; items.push({ cat: "Systems (MEP)", name: "Special Systems", desc: "ERV/HRV, simple controls and minor low-voltage allowances", low: d[0] * inp.sf, high: d[1] * inp.sf });
 
     // ALLOWANCES
-    a = psfFinish(I.kitchenBathPSF); items.push({ cat: "Allowances", name: "Kitchens & Baths Package", desc: "Cabinetry, counters, tile and shower glass finishes", low: a[0] * inp.sf, high: a[1] * inp[...]
+    a = psfFinish(I.kitchenBathPSF); items.push({ cat: "Allowances", name: "Kitchens & Baths Package", desc: "Cabinetry, counters, tile and shower glass finishes", low: a[0] * inp.sf, high: a[1] * inp.sf });
     b = lump(I.appliancesLump, finishMultItems); items.push({ cat: "Allowances", name: "Appliances", desc: "Typical kitchen + laundry appliance package", low: b[0], high: b[1] });
 
     // Site additions
@@ -513,7 +454,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   function render(est) {
-    var inp = est.inp;
+    var inp = est.inp || {};
     if (!inp.sf) {
       $('ce_rangeTotal') && ($('ce_rangeTotal').textContent = "$0 – $0");
       $('ce_rangePerSf') && ($('ce_rangePerSf').textContent = "$/SF: $0 – $0");
@@ -539,8 +480,8 @@ document.addEventListener('DOMContentLoaded', function () {
     var basementStr = inp.basement === 'none' ? 'No basement (slab)' : inp.basement === 'partial' ? 'Partial basement (~50%)' : 'Full basement (~100%)';
     $('ce_assumptions') && ($('ce_assumptions').textContent =
       "Region " + est.parts.regionFactor.toFixed(2) +
-      " • Finish " + inp.finish.toFixed(2) +
-      " • " + (inp.glazing * 100).toFixed(0) + "% glazing" +
+      " • Finish " + (+inp.finish || 1).toFixed(2) +
+      " • " + ((+inp.glazing || 0) * 100).toFixed(0) + "% glazing" +
       " • " + inp.domes + " dome" + (inp.domes === '1' ? '' : 's') +
       " • " + (inp.height === 'tall' ? 'tall shell' : 'std shell') +
       " • " + basementStr +
@@ -746,7 +687,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
   function updateRegionIdxBadge() {
     var slider = $('ce_regionIdx'); var badge = $('ce_regionIdxVal');
-    if (slider && badge) badge.textContent = (+slider.value || 1).toFixed(02);
+    if (slider && badge) badge.textContent = (+slider.value || 1).toFixed(2);
   }
   function toggleDrivewayInputs() {
     var cb = $('ce_optDriveway'); var len = $('ce_driveLen');
@@ -768,14 +709,14 @@ document.addEventListener('DOMContentLoaded', function () {
     $('ce_calcBtn').addEventListener('click', function () {
       var inp = getInputs();
       var est = compute(inp);
-      // save inputs for restore (user will likely export right after)
-      saveInputs(inp);
       lastInputs = inp; lastEstimate = est;
       render(est);
+      // persist after each meaningful calc
+      if (inp && inp.sf > 0) persistInputs(inp);
     });
   });
 
-  // Clear (keeps paywall state in localStorage)
+  // Clear (keeps paywall state in localStorage, clears saved inputs)
   whenReady(['ce_clearBtn'], function () {
     $('ce_clearBtn').addEventListener('click', function () {
       ['ce_sf', 'ce_driveLen'].forEach(function (id) { var el = $(id); if (el) el.value = ""; });
@@ -800,15 +741,14 @@ document.addEventListener('DOMContentLoaded', function () {
       if ($('ce_lightning')) $('ce_lightning').checked = false;
       if ($('ce_contPct')) $('ce_contPct').value = "10";
 
-      // wipe saved inputs
-      tryJSON(() => localStorage.removeItem(STORE_KEY_INPUTS));
+      clearInputsStore();
 
       var zero = {
         totals: { low: 0, high: 0, lowPSF: 0, highPSF: 0, structurePSFout: 0, preLow: 0, preHigh: 0, contLow: 0, contHigh: 0 },
         base: { structureCost: 0, glazingCost: 0, basementLow: 0, basementHigh: 0 },
         parts: { regionFactor: 1, optsSum: 0, optLabels: [], shell: null, sitework: { low: 0, high: 0, included: true } },
         items: [],
-        inp: { finish: 1, glazing: .2, domes: '1', height: 'std', site: 'flat', mep: 'standard', sf: 0, contPct: 0.10, opts: {}, baths: 2, expectedBaths: 1, drivewayLen: 0, includeSitework: true, base[...]
+        inp: { finish: 1, glazing: .2, domes: '1', height: 'std', site: 'flat', mep: 'standard', sf: 0, contPct: 0.10, opts: {}, baths: 2, expectedBaths: 1, drivewayLen: 0, includeSitework: true, basement: 'none', shellThk: 4, mixType: "std", oculusCount: 0, connector: "none", remote: "easy", inflationPower: "onsite", lightning: false }
       };
       lastEstimate = zero; lastInputs = zero.inp;
       render(zero);
@@ -823,6 +763,9 @@ document.addEventListener('DOMContentLoaded', function () {
     $('ce_printBtn').addEventListener('click', async function () {
       var inp = lastInputs || getInputs();
       if (!inp || !inp.sf) { alert("Enter square footage and click Calculate first."); return; }
+      // Persist current inputs BEFORE paywall/checkout
+      persistInputs(inp);
+
       if (!isPaid()) { openPaywall(); return; }
       var est = lastEstimate || compute(inp);
       if (!lastEstimate) { render(est); lastEstimate = est; lastInputs = inp; }
@@ -850,31 +793,30 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
-  /* ---------- Init: restore inputs if available, then render ---------- */
-  (function init() {
-    // Apply presets/visuals
-    applyRegionPreset();
-    toggleDrivewayInputs();
-    updateRegionIdxBadge();
-    updateRangeFill($('ce_regionIdx'));
+  /* ---------- Init ---------- */
 
-    // If we have saved inputs, restore them and compute immediately (nice after Stripe return)
-    const saved = loadSavedInputs();
-    if (saved && (saved.sf || 0) > 0) {
-      setInputs(saved);
-      const freshInp = getInputs();
-      const est = compute(freshInp);
-      lastInputs = freshInp; lastEstimate = est;
+  // If we have saved inputs (e.g., first load or post-Stripe), restore and render
+  (function tryRestoreOnLoad() {
+    const saved = readInputsFromStore();
+    if (saved) {
+      fillFormFromInputs(saved);
+      const est = compute(saved);
+      lastInputs = saved; lastEstimate = est;
       render(est);
     } else {
-      // Initial blank render
+      // Show zeros
       render({
         totals: { low: 0, high: 0, lowPSF: 0, highPSF: 0, structurePSFout: 0, preLow: 0, preHigh: 0, contLow: 0, contHigh: 0 },
         base: { structureCost: 0, glazingCost: 0, basementLow: 0, basementHigh: 0 },
         parts: { regionFactor: 1, optsSum: 0, optLabels: [], shell: null, sitework: { low: 0, high: 0, included: true } },
         items: [],
-        inp: { finish: 1, glazing: .2, domes: '1', height: 'std', site: 'flat', mep: 'standard', sf: 0, contPct: 0.10, opts: {}, baths: 2, expectedBaths: 1, drivewayLen: 0, includeSitework: true, base[...]
+        inp: { finish: 1, glazing: .2, domes: '1', height: 'std', site: 'flat', mep: 'standard', sf: 0, contPct: 0.10, opts: {}, baths: 2, expectedBaths: 1, drivewayLen: 0, includeSitework: true, basement: 'none', shellThk: 4, mixType: "std", oculusCount: 0, connector: "none", remote: "easy", inflationPower: "onsite", lightning: false }
       });
     }
   })();
+
+  applyRegionPreset();
+  toggleDrivewayInputs();
+  updateRegionIdxBadge();
+  updateRangeFill($('ce_regionIdx'));
 });
