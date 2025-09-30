@@ -1,4 +1,4 @@
- <!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -9,8 +9,10 @@
   <meta name="description" content="Planning-level budgeting tool for Insulated Concrete Domes (ICD). All client-side; no data leaves your browser." />
   <meta name="theme-color" content="#001f3f" />
 
-  <!-- Styles -->
+  <!-- Site CSS -->
   <link rel="stylesheet" href="./icdce.css" />
+
+  <!-- Page-specific tweaks -->
   <style>
     /* Sticky action bar (always visible on mobile) */
     #icdce ._stickybar{
@@ -20,11 +22,9 @@
       border-top:1px solid var(--border-color);
     }
     #icdce ._stickybar ._btn{ flex:1 1 auto; }
-    #icdce ._stickybar ._btn._good._unlocked{
-      box-shadow:0 0 0 2px rgba(52,168,83,.35) inset;
-    }
+    #icdce ._stickybar ._btn._good._unlocked{ box-shadow:0 0 0 2px rgba(52,168,83,.35) inset; }
 
-    /* Little “unlocked” toast */
+    /* Little “unlocked” toast (shown after Stripe success) */
     #icdce #icdce_unlocked{
       position:fixed; left:50%; transform:translateX(-50%) translateY(10px);
       top:10px; z-index:60; padding:10px 14px; border-radius:999px;
@@ -38,16 +38,56 @@
       to{ transform:translateX(-50%) translateY(10px); opacity:1; }
     }
 
-    /* Make option rows friendlier on phones */
+    /* Friendlier phone layout helpers */
     ._inline._inline-wrap label{ margin-right:8px; }
     ._inline._inline-stack{ flex-direction:column; align-items:flex-start; }
+
+    /* ---- Line-Item table: rotate hint + horizontal scroll polish ---- */
+
+    /* “Rotate phone” button (gold/orange accent fits the palette) */
+    #icdce ._rotateBtn{
+      border:none; border-radius:10px; padding:10px 14px; font-size:14px; font-weight:600; cursor:pointer;
+      color:#fff; background:linear-gradient(135deg,#f59e0b,#d97706); box-shadow:0 3px 8px rgba(0,0,0,.12);
+    }
+
+    /* Scrollable table container with iOS momentum */
+    #icdce ._breakdown{
+      position:relative;
+      overflow:auto;                 /* horizontal & vertical as needed */
+      -webkit-overflow-scrolling:touch;
+      max-height:400px;
+      border:1px solid var(--border-color);
+      border-radius:12px;
+      background:#fff;
+    }
+    /* Faint edge gradients that hint “scroll sideways” on phones */
+    #icdce ._breakdown::before,
+    #icdce ._breakdown::after{
+      content:"";
+      position:sticky;
+      top:0; bottom:0; width:18px; pointer-events:none; z-index:1;
+    }
+    #icdce ._breakdown::before{
+      left:0; background:linear-gradient(90deg, rgba(255,255,255,1), rgba(255,255,255,0));
+    }
+    #icdce ._breakdown::after{
+      right:0; background:linear-gradient(270deg, rgba(255,255,255,1), rgba(255,255,255,0));
+    }
+    /* Keep columns readable; panel will scroll if screen is narrow */
+    #icdce ._breakdown table{ min-width:640px; }
+
+    /* Subtle glow after hitting “Rotate phone” to draw attention */
+    #icdce ._breakdown._glow{ box-shadow:0 0 0 3px rgba(99,179,237,.25) inset; transition:box-shadow .6s ease; }
+
+    /* Hint text spacing */
+    #icdce ._rotateHint{ margin:6px 0 10px; }
   </style>
 </head>
+
 <body>
   <div id="icdce">
     <!-- Unlock toast (auto shown after Stripe success) -->
     <div id="icdce_unlocked" aria-live="polite" role="status">
-      <!-- simple checkmark -->
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path d="M20 6L9 17l-5-5" stroke="#065f46" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
@@ -71,7 +111,7 @@
           <div class="_grid">
             <div class="_field">
               <label class="_label" for="ce_sf">Conditioned SF</label>
-              <input id="ce_sf" class="_input" type="number" min="0" step="50" placeholder="e.g., 2000" />
+              <input id="ce_sf" class="_input" type="number" inputmode="numeric" min="0" step="50" placeholder="e.g., 2000" />
               <div class="_hint">Total conditioned square footage.</div>
             </div>
 
@@ -102,7 +142,7 @@
 
             <div class="_field">
               <label class="_label" for="ce_diameter">Dome Diameter (ft)</label>
-              <input id="ce_diameter" class="_input" type="number" min="20" step="1" placeholder="e.g., 50" />
+              <input id="ce_diameter" class="_input" type="number" inputmode="numeric" min="20" step="1" placeholder="e.g., 50" />
               <div class="_hint">Used for planning-level checks.</div>
             </div>
           </div>
@@ -185,7 +225,7 @@
 
             <div class="_field">
               <label class="_label" for="ce_oculusCount">Oculus / Skylight Count</label>
-              <input id="ce_oculusCount" class="_input" type="number" min="0" step="1" value="0" />
+              <input id="ce_oculusCount" class="_input" type="number" inputmode="numeric" min="0" step="1" value="0" />
             </div>
 
             <div class="_field">
@@ -287,7 +327,7 @@
               <label class="_label">Driveway (optional)</label>
               <div class="_inline _inline-stack">
                 <label><input type="checkbox" id="ce_optDriveway" /> Include driveway</label>
-                <input id="ce_driveLen" class="_input" type="number" min="0" max="150" step="5" value="100" />
+                <input id="ce_driveLen" class="_input" type="number" inputmode="numeric" min="0" max="150" step="5" value="100" />
               </div>
               <div class="_hint">Length in feet (0–150). Budget uses ~ $80/ft × region × site.</div>
             </div>
@@ -300,7 +340,7 @@
           <div class="_grid">
             <div class="_field">
               <label class="_label" for="ce_contPct">Contingency %</label>
-              <input id="ce_contPct" class="_input" type="number" min="0" max="100" step="0.1" value="10" />
+              <input id="ce_contPct" class="_input" type="number" inputmode="numeric" min="0" max="100" step="0.1" value="10" />
               <div class="_hint">Common planning allowance is 5–15% depending on risk.</div>
             </div>
             <div class="_field _full">
@@ -337,8 +377,14 @@
             </div>
           </div>
 
-          <h3 class="_results-title">Line-Item Breakdown</h3>
-          <div class="_panel _breakdown">
+          <!-- Line-Item header + Rotate phone CTA -->
+          <div class="_linehead" style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin:20px 0 6px;">
+            <h3 class="_results-title" style="margin:0;">Line-Item Breakdown</h3>
+            <button type="button" class="_rotateBtn" id="rotateBtn" aria-label="Rotate phone for better table view">Rotate phone</button>
+          </div>
+          <p class="_hint _rotateHint">Tip: On small phones, rotate to landscape to view the entire table.</p>
+
+          <div class="_panel _breakdown" aria-label="Line item table (scroll sideways on small screens)">
             <table>
               <thead>
                 <tr>
@@ -393,13 +439,13 @@
     </div>
   </div>
 
-  <!-- App JS -->
+  <!-- App JS (calculator + paywall logic) -->
   <script src="./icdce.js"></script>
 
-  <!-- Tiny helper: show “unlocked” toast + highlight Export button after Stripe return -->
+  <!-- Tiny helpers: “unlocked” toast + rotate phone button actions -->
   <script>
     document.addEventListener('DOMContentLoaded', function () {
-      // IMPORTANT: this must match STORE_KEY in icdce.js
+      // IMPORTANT: must match STORE_KEY in icdce.js
       var STORE_KEY = 'icdce_paid_test1d';
 
       try {
@@ -424,6 +470,37 @@
           }
         }
       } catch (e) { /* ignore */ }
+
+      // Rotate phone button behavior
+      (function(){
+        var rotateBtn = document.getElementById('rotateBtn');
+        var breakdown = document.querySelector('._breakdown');
+        function glowPanel(){
+          if (!breakdown) return;
+          breakdown.classList.add('_glow');
+          setTimeout(function(){ breakdown.classList.remove('_glow'); }, 1200);
+          breakdown.scrollIntoView({ behavior:'smooth', block:'start' });
+        }
+        if (rotateBtn){
+          rotateBtn.addEventListener('click', async function(){
+            glowPanel();
+            try {
+              // Best-effort: full screen + orientation lock where supported
+              if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+                await document.documentElement.requestFullscreen();
+              }
+              if (screen.orientation && screen.orientation.lock) {
+                await screen.orientation.lock('landscape');
+              } else {
+                alert('Tip: Rotate your phone to landscape to view the entire table.');
+              }
+            } catch(e){
+              // Some browsers disallow locking without user gesture or at all
+              alert('Tip: Rotate your phone to landscape to view the entire table.');
+            }
+          });
+        }
+      })();
     });
   </script>
 
