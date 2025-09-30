@@ -2,22 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>ICD Cost Estimator™</title>
 
-  <!-- Site meta (optional but nice) -->
   <meta name="description" content="Planning-level budgeting tool for Insulated Concrete Domes (ICD). All client-side; no data leaves your browser." />
   <meta name="theme-color" content="#001f3f" />
 
-  <!-- External CSS -->
   <link rel="stylesheet" href="./icdce.css" />
 </head>
 <body>
-  <!-- ===== Estimator UI ===== -->
   <div id="icdce">
     <div class="_wrap">
-      <div class="_brandbar" style="flex-wrap:wrap;">
-        <div class="_brandleft" style="flex-wrap:wrap;">
+      <!-- Brand bar -->
+      <div class="_brandbar _wrap-mobile">
+        <div class="_brandleft _wrap-mobile">
           <div class="_mark">ICD Cost Estimator<span>™</span></div>
           <div class="_tagline">Planning-level budgeting for Insulated Concrete Domes</div>
         </div>
@@ -232,22 +230,22 @@
 
             <div class="_field _wide">
               <label class="_label">Optional Systems</label>
-              <div class="_inline" style="flex-wrap:wrap;">
-                <label style="margin-right:8px;"><input type="checkbox" id="ce_optSolar" /> Solar PV (+$20k)</label>
-                <label style="margin-right:8px;"><input type="checkbox" id="ce_optStorage" /> Battery Storage (+$18k)</label>
-                <label style="margin-right:8px;"><input type="checkbox" id="ce_optGeo" /> Geothermal (+$45k)</label>
-                <label style="margin-right:8px;"><input type="checkbox" id="ce_optRain" /> Rainwater collection / cistern (+$12k)</label>
-                <label style="margin-right:8px;"><input type="checkbox" id="ce_optSeptic" /> Septic (+$35k)</label>
-                <label style="margin-right:8px;"><input type="checkbox" id="ce_optHydronic" /> Hydronic radiant floors (+$20k)</label>
+              <div class="_inline _inline-wrap">
+                <label><input type="checkbox" id="ce_optSolar" /> Solar PV (+$20k)</label>
+                <label><input type="checkbox" id="ce_optStorage" /> Battery Storage (+$18k)</label>
+                <label><input type="checkbox" id="ce_optGeo" /> Geothermal (+$45k)</label>
+                <label><input type="checkbox" id="ce_optRain" /> Rainwater collection / cistern (+$12k)</label>
+                <label><input type="checkbox" id="ce_optSeptic" /> Septic (+$35k)</label>
+                <label><input type="checkbox" id="ce_optHydronic" /> Hydronic radiant floors (+$20k)</label>
               </div>
               <div class="_hint">Planning-level adders you can toggle on/off.</div>
             </div>
 
             <div class="_field _wide">
               <label class="_label">Driveway (optional)</label>
-              <div class="_inline" style="flex-wrap:wrap;">
-                <label style="margin-right:8px;"><input type="checkbox" id="ce_optDriveway" /> Include driveway</label>
-                <input id="ce_driveLen" class="_input" type="number" min="0" max="150" step="5" value="100" style="width:160px" />
+              <div class="_inline _inline-stack">
+                <label><input type="checkbox" id="ce_optDriveway" /> Include driveway</label>
+                <input id="ce_driveLen" class="_input" type="number" min="0" max="150" step="5" value="100" />
               </div>
               <div class="_hint">Length in feet (0–150). Budget uses ~ $80/ft × region × site.</div>
             </div>
@@ -264,18 +262,18 @@
               <div class="_hint">Common planning allowance is 5–15% depending on risk.</div>
             </div>
             <div class="_field _full">
-              <div class="_inline" style="justify-content:flex-end;gap:10px;flex-wrap:wrap;">
-                <button id="ce_calcBtn" class="_btn">Calculate</button>
-                <button id="ce_clearBtn" class="_btn _secondary">Clear</button>
-                <button id="ce_printBtn" class="_btn _good">Export PDF</button>
+              <div class="_inline _actions-mobile">
+                <button id="ce_calcBtn" class="_btn" type="button">Calculate</button>
+                <button id="ce_clearBtn" class="_btn _secondary" type="button">Clear</button>
+                <button id="ce_printBtn" class="_btn _good" type="button">Export PDF</button>
               </div>
             </div>
           </div>
         </div>
 
         <!-- Results -->
-        <div style="padding:20px">
-          <div class="_cards" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;">
+        <div class="_results-pad">
+          <div class="_cards">
             <div class="_card">
               <h3>Estimated Range</h3>
               <div class="_big" id="ce_rangeTotal">$0 – $0</div>
@@ -297,9 +295,9 @@
             </div>
           </div>
 
-          <h3 style="margin:20px 0 10px;color:var(--secondary-color)">Line-Item Breakdown</h3>
-          <div class="_panel" style="border:1px solid var(--border-color);border-radius:12px;overflow:auto;max-height:400px;">
-            <table style="width:100%;">
+          <h3 class="_results-title">Line-Item Breakdown</h3>
+          <div class="_panel _table-scroll">
+            <table>
               <thead>
                 <tr>
                   <th>Category</th>
@@ -318,7 +316,7 @@
             </table>
           </div>
 
-          <div style="margin-top:16px;font-size:12px;color:#475569;line-height:1.5">
+          <div class="_disclaimer">
             <strong>Important:</strong> Planning-level estimate only (not a bid). Final costs depend on site, engineering, and trade bids.
           </div>
         </div>
@@ -330,13 +328,13 @@
       <div class="_modal" role="dialog" aria-modal="true" aria-labelledby="pw_title">
         <h3 id="pw_title">Export PDF</h3>
         <p>Exporting a formatted, two-page PDF is a paid feature. Complete checkout and you’ll be returned here automatically.</p>
-        <div class="_row">
+        <div class="_row _actions-mobile">
           <button id="pw_payBtn" class="_btn _good" type="button">Go to Checkout</button>
           <button id="pw_closeBtn" class="_btn _secondary" type="button">Close</button>
         </div>
         <hr style="border:none;border-top:1px solid #e5e7eb;margin:14px 0;">
         <p style="margin-bottom:6px;">Already paid? Enter your access code or use a paid return link.</p>
-        <div class="_codeRow">
+        <div class="_codeRow _inline _inline-stack">
           <input id="pw_code" class="_input" type="text" placeholder="Access code (optional)" />
           <button id="pw_apply" class="_btn" type="button">Apply Code</button>
         </div>
@@ -345,11 +343,7 @@
     </div>
   </div>
 
-  <!-- ===== App JS (must be after the HTML so elements exist) ===== -->
   <script src="./icdce.js"></script>
-
-  <!-- Optional: show a message if JS is disabled -->
   <noscript>Please enable JavaScript to use the ICD Cost Estimator.</noscript>
 </body>
 </html>
-
