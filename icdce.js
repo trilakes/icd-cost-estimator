@@ -49,34 +49,120 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   })();
 
+  // Improved paywall navigation with layered fallbacks (top nav, new tab, anchor click, same-frame)
   function openPaywall() {
     const el = $('icdce_paywall');
-    if (!el) {
-      // Fallback: navigate entire tab (top) to Stripe (works even if this page is inside a builder iframe)
-      try {
-        (window.top || window).location.assign(PAY_URL);
-      } catch {
-        window.location.href = PAY_URL;
-      }
+    if (el) {
+      // If a local paywall modal exists in the page, show it. That is the preferred UX.
+      el.style.display = 'flex';
+      el.setAttribute('aria-hidden', 'false');
       return;
     }
-    el.style.display = 'flex';
-    el.setAttribute('aria-hidden', 'false');
+
+    // No in-page modal available — attempt to navigate to the Stripe payment link.
+    // Many site builders (GoDaddy preview/editor) load pages in sandboxed iframes which block
+    // top-level navigation or window.open. We'll try a few strategies in order and fall back to
+    // a user-visible message if none succeed.
+    try {
+      // 1) Try top-level navigation (best for regular sites)
+      (window.top || window).location.assign(PAY_URL);
+      return;
+    } catch (e) {
+      console.warn('Top navigation to checkout blocked, trying fallbacks', e);
+    }
+
+    try {
+      // 2) Try opening a new tab/window (should be allowed when invoked by a user click)
+      var w = window.open(PAY_URL, '_blank', 'noopener');
+      if (w) { try { w.focus(); } catch (_) {} ; return; }
+    } catch (e) {
+      console.warn('window.open to checkout blocked', e);
+    }
+
+    try {
+      // 3) Anchor click fallback (programmatic click on an <a target="_blank">)
+      var a = document.createElement('a');
+      a.href = PAY_URL;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      return;
+    } catch (e) {
+      console.warn('Anchor click to checkout blocked', e);
+    }
+
+    try {
+      // 4) Last resort: navigate the current frame (may be allowed when others are blocked)
+      window.location.href = PAY_URL;
+      return;
+    } catch (e) {
+      console.warn('Fallback current-frame navigation blocked', e);
+    }
+
+    // If everything is blocked (common in sandboxed preview iframes), inform the user with an explicit link
+    try {
+      alert('Could not open the checkout window automatically (this can happen in site editors or sandboxed previews). Please open this link in a new tab to complete payment:\n\n' + PAY_URL);
+    } catch (e) {
+      // If even alert is blocked, put link on console
+      console.error('Could not open checkout automatically. Please visit: ' + PAY_URL);
+    }
   }
+
   function closePaywall() {
     const el = $('icdce_paywall');
     if (!el) return;
     el.style.display = 'none';
     el.setAttribute('aria-hidden', 'true');
   }
+
   function gotoCheckout() {
     // Save current inputs before leaving so we can restore after return
     const inp = getInputs();
     if (inp && (inp.sf || 0) > 0) saveInputs(inp);
+
+    // Use same robust navigation strategy as openPaywall (so checkout works even inside builders)
     try {
       (window.top || window).location.assign(PAY_URL);
-    } catch {
+      return;
+    } catch (e) {
+      console.warn('Top navigation blocked in gotoCheckout', e);
+    }
+
+    try {
+      var w = window.open(PAY_URL, '_blank', 'noopener');
+      if (w) { try { w.focus(); } catch (_) {} ; return; }
+    } catch (e) {
+      console.warn('window.open blocked in gotoCheckout', e);
+    }
+
+    try {
+      var a = document.createElement('a');
+      a.href = PAY_URL;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      return;
+    } catch (e) {
+      console.warn('Anchor click blocked in gotoCheckout', e);
+    }
+
+    try {
       window.location.href = PAY_URL;
+      return;
+    } catch (e) {
+      console.warn('Final fallback navigation blocked in gotoCheckout', e);
+    }
+
+    try {
+      alert('Could not open checkout automatically. Please open this link in a new tab to complete payment:\n\n' + PAY_URL);
+    } catch (e) {
+      console.error('Could not open checkout. Please visit: ' + PAY_URL);
     }
   }
 
@@ -313,16 +399,16 @@ document.addEventListener('DOMContentLoaded', function () {
     var items = [];
 
     // PRE-CONSTRUCTION
-    var a = psf(I.designDocsPSF); items.push({ cat: "Pre-Construction", name: "Design & Construction Documents", desc: "Full architecture/engineering and coordinated construction drawings", low: a[0] * inp.sf, high: a[1] * inp.sf });
-    var b = psf(I.permitsFeesPSF); items.push({ cat: "Pre-Construction", name: "Permits & Agency Fees", desc: "Plan review, building permit, utility/tap fees where applicable", low: b[0] * inp.sf, high: b[1] * inp.sf });
-    var c = lump(I.surveyGeotechLump, siteMultItems); items.push({ cat: "Pre-Construction", name: "Survey & Geotechnical", desc: "Boundary/topographic survey and geotechnical (soils) report", low: c[0], high: c[1] });
-    var d = lump(I.mobilizationLump, siteMultItems); items.push({ cat: "Pre-Construction", name: "Mobilization", desc: "Staging, temporary power/water, delivery logistics setup", low: d[0], high: d[1] });
+    var a = psf(I.designDocsPSF); items.push({ cat: "Pre-Construction", name: "Design & Construction Documents", desc: "Full architecture/engineering and coordinated construction drawings", low: a[0] [...]
+    var b = psf(I.permitsFeesPSF); items.push({ cat: "Pre-Construction", name: "Permits & Agency Fees", desc: "Plan review, building permit, utility/tap fees where applicable", low: b[0] * inp.sf, hig[...]
+    var c = lump(I.surveyGeotechLump, siteMultItems); items.push({ cat: "Pre-Construction", name: "Survey & Geotechnical", desc: "Boundary/topographic survey and geotechnical (soils) report", low: c[0[...]
+    var d = lump(I.mobilizationLump, siteMultItems); items.push({ cat: "Pre-Construction", name: "Mobilization", desc: "Staging, temporary power/water, delivery logistics setup", low: d[0], high: d[1][...]
 
     // SITE & FOUNDATION (non-shell)
     var siteworkPSF = psfSite(I.siteworkPSF);
     var siteworkLow = inp.includeSitework ? siteworkPSF[0] * inp.sf : 0;
     var siteworkHigh = inp.includeSitework ? siteworkPSF[1] * inp.sf : 0;
-    items.push({ cat: "Site & Foundation", name: "Sitework & Rough Grading", desc: (inp.includeSitework ? "Clearing, rough grading, temporary access, erosion control" : "Excluded (by owner/others)"), low: siteworkLow, high: siteworkHigh });
+    items.push({ cat: "Site & Foundation", name: "Sitework & Rough Grading", desc: (inp.includeSitework ? "Clearing, rough grading, temporary access, erosion control" : "Excluded (by owner/others)"), [...]
 
     b = psfSite(I.utilitiesStubPSF); b[0] *= bf.bathUF; b[1] *= bf.bathUF;
     items.push({ cat: "Site & Foundation", name: "Utilities Stub-ins", desc: "Trenching and laterals for water/septic/electric to the shell", low: b[0] * inp.sf, high: b[1] * inp.sf });
@@ -330,19 +416,19 @@ document.addEventListener('DOMContentLoaded', function () {
     var f = psfSite(I.foundationPSF);
     items.push({ cat: "Site & Foundation", name: "Foundation / Slab / Footings", desc: "Footings, slab, anchors — basement costs shown separately", low: f[0] * inp.sf, high: f[1] * inp.sf });
 
-    items.push({ cat: "Site & Foundation", name: "Basement", desc: inp.basement === 'none' ? 'None (slab only)' : inp.basement === 'partial' ? 'Partial (~50% footprint)' : 'Full (~100% footprint)', low: basementLow, high: basementHigh });
+    items.push({ cat: "Site & Foundation", name: "Basement", desc: inp.basement === 'none' ? 'None (slab only)' : inp.basement === 'partial' ? 'Partial (~50% footprint)' : 'Full (~100% footprint)', lo[...]
 
     // CORE STRUCTURE (shell)
-    items.push({ cat: "Core Structure", name: "Base Dome Shell (Airform, Foam, Rebar, Shotcrete)", desc: "Airform membrane, spray foam insulation, rebar, shotcrete structural shell (multipliers: region/domes/height/site)", low: structureCost, high: structureCost });
+    items.push({ cat: "Core Structure", name: "Base Dome Shell (Airform, Foam, Rebar, Shotcrete)", desc: "Airform membrane, spray foam insulation, rebar, shotcrete structural shell (multipliers: regio[...]
 
     if (inp.oculusCount > 0) {
       var oculus = lump(I.oculusCurbLumpPerEa);
-      items.push({ cat: "Core Structure", name: "Oculus/Skylights Curbs", desc: inp.oculusCount + " unit" + (inp.oculusCount === 1 ? "" : "s"), low: oculus[0] * inp.oculusCount, high: oculus[1] * inp.oculusCount });
+      items.push({ cat: "Core Structure", name: "Oculus/Skylights Curbs", desc: inp.oculusCount + " unit" + (inp.oculusCount === 1 ? "" : "s"), low: oculus[0] * inp.oculusCount, high: oculus[1] * inp.[...]
     }
     if (inp.connector !== "none") {
       var connectorLump = inp.connector === "short" ? I.connectorShellShort : inp.connector === "med" ? I.connectorShellMed : I.connectorShellLong;
       var connectorCost = lump(connectorLump);
-      items.push({ cat: "Core Structure", name: "Connector / Tunnel (Shell)", desc: inp.connector.charAt(0).toUpperCase() + inp.connector.slice(1) + " connector", low: connectorCost[0], high: connectorCost[1] });
+      items.push({ cat: "Core Structure", name: "Connector / Tunnel (Shell)", desc: inp.connector.charAt(0).toUpperCase() + inp.connector.slice(1) + " connector", low: connectorCost[0], high: connecto[...]
     }
 
     // EXTERIOR
@@ -350,22 +436,22 @@ document.addEventListener('DOMContentLoaded', function () {
     items.push({ cat: "Exterior", name: "Exterior Finishes / Coatings", desc: "Membrane topcoat/paint and trims at shell openings", low: a[0] * inp.sf, high: a[1] * inp.sf });
     var transWp = lump(I.transitionWaterproofLump);
     items.push({ cat: "Exterior", name: "Transition Waterproofing at Openings", desc: "Waterproofing transitions around openings", low: transWp[0], high: transWp[1] });
-    items.push({ cat: "Exterior", name: "Windows & Glazed Openings", desc: (inp.glazing * 100).toFixed(0) + "% of shell surface @ $" + (CONFIG.glazingCostPerSF[inp.glazing] || 0) + "/SF", low: glazingCost, high: glazingCost });
+    items.push({ cat: "Exterior", name: "Windows & Glazed Openings", desc: (inp.glazing * 100).toFixed(0) + "% of shell surface @ $" + (CONFIG.glazingCostPerSF[inp.glazing] || 0) + "/SF", low: glazing[...]
 
     // INTERIORS
-    a = psfFinish(I.interiorFramingPSF); items.push({ cat: "Interiors", name: "Interior Framing & Partitions", desc: "Non-structural partitions and basic framing details", low: a[0] * inp.sf, high: a[1] * inp.sf });
-    b = psfFinish(I.insulDrywallPSF); items.push({ cat: "Interiors", name: "Insulation & Drywall", desc: "Thermal/sound insulation plus drywall hang, tape and texture", low: b[0] * inp.sf, high: b[1] * inp.sf });
-    c = psfFinish(I.flooringFinishesPSF); items.push({ cat: "Interiors", name: "Flooring & Interior Finishes", desc: "LVT/tile/carpet, interior paint and finish carpentry", low: c[0] * inp.sf, high: c[1] * inp.sf });
-    d = psfFinish(I.millworkDoorsPSF); items.push({ cat: "Interiors", name: "Millwork, Interior Doors & Trim", desc: "Interior doors, casing/base, basic built-ins/shelving", low: d[0] * inp.sf, high: d[1] * inp.sf });
+    a = psfFinish(I.interiorFramingPSF); items.push({ cat: "Interiors", name: "Interior Framing & Partitions", desc: "Non-structural partitions and basic framing details", low: a[0] * inp.sf, high: a[[...]
+    b = psfFinish(I.insulDrywallPSF); items.push({ cat: "Interiors", name: "Insulation & Drywall", desc: "Thermal/sound insulation plus drywall hang, tape and texture", low: b[0] * inp.sf, high: b[1] [...]
+    c = psfFinish(I.flooringFinishesPSF); items.push({ cat: "Interiors", name: "Flooring & Interior Finishes", desc: "LVT/tile/carpet, interior paint and finish carpentry", low: c[0] * inp.sf, high: c[...]
+    d = psfFinish(I.millworkDoorsPSF); items.push({ cat: "Interiors", name: "Millwork, Interior Doors & Trim", desc: "Interior doors, casing/base, basic built-ins/shelving", low: d[0] * inp.sf, high: d[...]
 
     // SYSTEMS (MEP)
-    a = psfMEP(I.plumbingPSF); a[0] *= bf.bathPF; a[1] *= bf.bathPF; items.push({ cat: "Systems (MEP)", name: "Plumbing (rough-in + fixtures)", desc: "Supply/drain/vent, water heater and standard plumbing fixtures", low: a[0] * inp.sf, high: a[1] * inp.sf });
-    b = psfMEP(I.electricalPSF); b[0] *= bf.bathPF; b[1] *= bf.bathPF; items.push({ cat: "Systems (MEP)", name: "Electrical (rough-in + devices)", desc: "Service/panels, branch circuits, devices and light fixtures", low: b[0] * inp.sf, high: b[1] * inp.sf });
-    c = psfMEP(I.hvacPSF); items.push({ cat: "Systems (MEP)", name: "HVAC / Mechanical", desc: "Heat pump/furnace/air handler and distribution (ducted/ductless)", low: c[0] * inp.sf, high: c[1] * inp.sf });
-    d = psfMEP(I.specialSystemsPSF); d[0] *= bf.bathSF; d[1] *= bf.bathSF; items.push({ cat: "Systems (MEP)", name: "Special Systems", desc: "ERV/HRV, simple controls and minor low-voltage allowances", low: d[0] * inp.sf, high: d[1] * inp.sf });
+    a = psfMEP(I.plumbingPSF); a[0] *= bf.bathPF; a[1] *= bf.bathPF; items.push({ cat: "Systems (MEP)", name: "Plumbing (rough-in + fixtures)", desc: "Supply/drain/vent, water heater and standard plum[...]
+    b = psfMEP(I.electricalPSF); b[0] *= bf.bathPF; b[1] *= bf.bathPF; items.push({ cat: "Systems (MEP)", name: "Electrical (rough-in + devices)", desc: "Service/panels, branch circuits, devices and l[...]
+    c = psfMEP(I.hvacPSF); items.push({ cat: "Systems (MEP)", name: "HVAC / Mechanical", desc: "Heat pump/furnace/air handler and distribution (ducted/ductless)", low: c[0] * inp.sf, high: c[1] * inp.[...]
+    d = psfMEP(I.specialSystemsPSF); d[0] *= bf.bathSF; d[1] *= bf.bathSF; items.push({ cat: "Systems (MEP)", name: "Special Systems", desc: "ERV/HRV, simple controls and minor low-voltage allowances"[...]
 
     // ALLOWANCES
-    a = psfFinish(I.kitchenBathPSF); items.push({ cat: "Allowances", name: "Kitchens & Baths Package", desc: "Cabinetry, counters, tile and shower glass finishes", low: a[0] * inp.sf, high: a[1] * inp.sf });
+    a = psfFinish(I.kitchenBathPSF); items.push({ cat: "Allowances", name: "Kitchens & Baths Package", desc: "Cabinetry, counters, tile and shower glass finishes", low: a[0] * inp.sf, high: a[1] * inp[...]
     b = lump(I.appliancesLump, finishMultItems); items.push({ cat: "Allowances", name: "Appliances", desc: "Typical kitchen + laundry appliance package", low: b[0], high: b[1] });
 
     // Site additions
@@ -660,7 +746,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
   function updateRegionIdxBadge() {
     var slider = $('ce_regionIdx'); var badge = $('ce_regionIdxVal');
-    if (slider && badge) badge.textContent = (+slider.value || 1).toFixed(2);
+    if (slider && badge) badge.textContent = (+slider.value || 1).toFixed(02);
   }
   function toggleDrivewayInputs() {
     var cb = $('ce_optDriveway'); var len = $('ce_driveLen');
@@ -722,7 +808,7 @@ document.addEventListener('DOMContentLoaded', function () {
         base: { structureCost: 0, glazingCost: 0, basementLow: 0, basementHigh: 0 },
         parts: { regionFactor: 1, optsSum: 0, optLabels: [], shell: null, sitework: { low: 0, high: 0, included: true } },
         items: [],
-        inp: { finish: 1, glazing: .2, domes: '1', height: 'std', site: 'flat', mep: 'standard', sf: 0, contPct: 0.10, opts: {}, baths: 2, expectedBaths: 1, drivewayLen: 0, includeSitework: true, basement: 'none', shellThk: 4, mixType: "std", oculusCount: 0, connector: "none", remote: "easy", inflationPower: "onsite", lightning: false }
+        inp: { finish: 1, glazing: .2, domes: '1', height: 'std', site: 'flat', mep: 'standard', sf: 0, contPct: 0.10, opts: {}, baths: 2, expectedBaths: 1, drivewayLen: 0, includeSitework: true, base[...]
       };
       lastEstimate = zero; lastInputs = zero.inp;
       render(zero);
@@ -787,7 +873,7 @@ document.addEventListener('DOMContentLoaded', function () {
         base: { structureCost: 0, glazingCost: 0, basementLow: 0, basementHigh: 0 },
         parts: { regionFactor: 1, optsSum: 0, optLabels: [], shell: null, sitework: { low: 0, high: 0, included: true } },
         items: [],
-        inp: { finish: 1, glazing: .2, domes: '1', height: 'std', site: 'flat', mep: 'standard', sf: 0, contPct: 0.10, opts: {}, baths: 2, expectedBaths: 1, drivewayLen: 0, includeSitework: true, basement: 'none', shellThk: 4, mixType: "std", oculusCount: 0, connector: "none", remote: "easy", inflationPower: "onsite", lightning: false }
+        inp: { finish: 1, glazing: .2, domes: '1', height: 'std', site: 'flat', mep: 'standard', sf: 0, contPct: 0.10, opts: {}, baths: 2, expectedBaths: 1, drivewayLen: 0, includeSitework: true, base[...]
       });
     }
   })();
