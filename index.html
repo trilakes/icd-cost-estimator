@@ -7,14 +7,13 @@
 
   <!-- Meta -->
   <meta name="description" content="Planning-level budgeting tool for Insulated Concrete Domes (ICD). All client-side; no data leaves your browser." />
-  <meta name="theme-color" content="#001f3f" />
+  <meta name="theme-color" content="#0f172a" />
 
   <!-- Styles -->
   <link rel="stylesheet" href="./icdce.css" />
 </head>
 <body>
 <div id="icdce">
-
   <!-- Unlock toast -->
   <div id="icdce_unlocked" aria-live="polite" role="status">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -25,7 +24,6 @@
   </div>
 
   <div class="_wrap">
-
     <!-- Brand bar -->
     <div class="_brandbar">
       <div class="_brandleft">
@@ -39,8 +37,8 @@
     <div class="_panel" role="region" aria-label="ICD Cost Estimator">
 
       <!-- Project Basics -->
-      <div class="_section _project-basics">
-        <h2 class="_sectionTitle">Project Basics</h2>
+      <section class="_section _section--boxed _project-basics" aria-labelledby="s_projectBasics">
+        <h2 id="s_projectBasics" class="_sectionTitle">Project Basics</h2>
         <div class="_grid">
           <div class="_field">
             <label class="_label" for="ce_sf">Conditioned SF</label>
@@ -59,31 +57,31 @@
             <div class="_hint">Rural/smaller markets → Low-cost; coastal/big metros → Very high.</div>
           </div>
 
-          <div class="_field _full">
-            <label class="_label" for="ce_regionIdx">Region Cost Index (fine-tune)</label>
-            <div class="_inline">
-              <input id="ce_regionIdx" class="_input" type="range" min="0.80" max="1.40" step="0.01" value="1.00" list="ce_regionTicks" />
-              <span class="_badge" id="ce_regionIdxVal">1.00</span>
-            </div>
-            <datalist id="ce_regionTicks">
-              <option value="0.80"></option><option value="0.90"></option><option value="1.00"></option>
-              <option value="1.10"></option><option value="1.20"></option><option value="1.30"></option><option value="1.40"></option>
-            </datalist>
-            <div class="_ticks"><span>0.80</span><span>0.90</span><span>1.00</span><span>1.10</span><span>1.20</span><span>1.30</span><span>1.40</span></div>
-            <div class="_hint">Slide until Base Shell $/SF roughly matches your recent jobs.</div>
-          </div>
-
           <div class="_field">
             <label class="_label" for="ce_diameter">Dome Diameter (ft)</label>
             <input id="ce_diameter" class="_input" type="number" min="20" step="1" placeholder="e.g., 50" />
             <div class="_hint">Used for planning-level checks.</div>
           </div>
+
+          <div class="_field _wide">
+            <label class="_label" for="ce_regionIdx">Region Cost Index (fine-tune)</label>
+            <div class="_inline _compact">
+              <input id="ce_regionIdx" class="_input _sm" type="range" min="0.80" max="1.40" step="0.01" value="1.00" list="ce_regionTicks" />
+              <span class="_badge _sm" id="ce_regionIdxVal">1.00</span>
+            </div>
+            <datalist id="ce_regionTicks">
+              <option value="0.80"></option><option value="0.90"></option><option value="1.00"></option>
+              <option value="1.10"></option><option value="1.20"></option><option value="1.30"></option><option value="1.40"></option>
+            </datalist>
+            <div class="_ticks _sm"><span>0.80</span><span>0.90</span><span>1.00</span><span>1.10</span><span>1.20</span><span>1.30</span><span>1.40</span></div>
+            <div class="_hint">Slide until Base Shell $/SF roughly matches your recent jobs.</div>
+          </div>
         </div>
-      </div>
+      </section>
 
       <!-- Design & Envelope -->
-      <div class="_section _design-envelope">
-        <h2 class="_sectionTitle">Design &amp; Envelope</h2>
+      <section class="_section _section--boxed _design-envelope" aria-labelledby="s_designEnv">
+        <h2 id="s_designEnv" class="_sectionTitle">Design &amp; Envelope</h2>
         <div class="_grid">
           <div class="_field">
             <label class="_label" for="ce_finish">Finish Level</label>
@@ -164,11 +162,11 @@
             </select>
           </div>
         </div>
-      </div>
+      </section>
 
       <!-- Site & Systems -->
-      <div class="_section _site-systems">
-        <h2 class="_sectionTitle">Site &amp; Systems</h2>
+      <section class="_section _section--boxed _site-systems" aria-labelledby="s_siteSystems">
+        <h2 id="s_siteSystems" class="_sectionTitle">Site &amp; Systems</h2>
         <div class="_grid">
           <div class="_field">
             <label class="_label" for="ce_site">Site Conditions</label>
@@ -210,12 +208,15 @@
           <label><input type="checkbox" id="ce_optHydronic" /> Hydronic Floors</label>
           <label><input type="checkbox" id="ce_optDriveway" /> Driveway</label>
         </div>
-        <div class="_field _full">
+        <div class="_field _wide">
           <label class="_label" for="ce_driveLen">Driveway Length (ft)</label>
           <input id="ce_driveLen" class="_input" type="number" min="0" step="10" value="0" disabled />
         </div>
+      </section>
 
-        <h3 class="_sectionSubtitle">Other Site Factors</h3>
+      <!-- Other Site Factors -->
+      <section class="_section _section--boxed _other-factors" aria-labelledby="s_otherFactors">
+        <h2 id="s_otherFactors" class="_sectionTitle">Other Site Factors</h2>
         <div class="_grid">
           <div class="_field">
             <label class="_label" for="ce_remote">Remote Access</label>
@@ -235,18 +236,21 @@
           </div>
 
           <div class="_field">
-            <label><input type="checkbox" id="ce_lightning" /> Lightning Protection</label>
+            <label class="_label" for="ce_lightning">
+              <input type="checkbox" id="ce_lightning" /> Lightning Protection
+            </label>
           </div>
         </div>
-      </div>
+      </section>
 
-      <!-- Contingency -->
-      <div class="_section _soft-cont">
-        <h2 class="_sectionTitle">Contingency</h2>
+      <!-- Contingency & Actions -->
+      <section class="_section _section--boxed _soft-cont" aria-labelledby="s_contingency">
+        <h2 id="s_contingency" class="_sectionTitle">Contingency</h2>
         <div class="_grid">
           <div class="_field">
             <label class="_label" for="ce_contPct">Contingency %</label>
             <input id="ce_contPct" class="_input" type="number" min="0" max="100" step="0.1" value="10" />
+            <div class="_hint">Estimator applies contingency to the subtotal only.</div>
           </div>
           <div class="_field _full">
             <div class="_inline _actions-mobile">
@@ -256,34 +260,34 @@
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
       <!-- Results -->
       <div class="_results-pad">
         <div class="_cards">
-          <div class="_card">
+          <div class="_card" aria-live="polite">
             <h3>Estimated Range</h3>
             <div class="_big" id="ce_rangeTotal">$0 – $0</div>
             <div class="_small" id="ce_rangePerSf">$/SF: $0 – $0</div>
           </div>
-          <div class="_card">
+          <div class="_card" aria-live="polite">
             <h3>Base Dome Shell</h3>
             <div class="_big" id="ce_baseTotal">$0</div>
             <div class="_small" id="ce_basePsf">$/SF: $0</div>
           </div>
-          <div class="_card">
+          <div class="_card" aria-live="polite">
             <h3>Sitework &amp; Rough Grading</h3>
             <div class="_big" id="ce_siteworkTotal">$0 – $0</div>
             <div class="_small" id="ce_siteworkNote">Included</div>
           </div>
-          <div class="_card" style="grid-column:1 / -1;">
+          <div class="_card" style="grid-column:1 / -1;" aria-live="polite">
             <h3>Assumptions</h3>
             <div class="_small" id="ce_assumptions">Region 1.00 • Standard finish • Typical glazing • Single dome</div>
           </div>
         </div>
 
         <h3 class="_results-title">Line-Item Breakdown</h3>
-        <div class="_panel _breakdown">
+        <div class="_panel _breakdown" role="region" aria-label="Line-item breakdown table">
           <table>
             <thead>
               <tr>
@@ -302,9 +306,9 @@
             </tbody>
           </table>
         </div>
-        <div class="_disclaimer">
+        <p class="_disclaimer">
           <strong>Important:</strong> Planning-level estimate only (not a bid). Final costs depend on site, engineering, and trade bids.
-        </div>
+        </p>
       </div>
     </div>
   </div>
@@ -324,7 +328,7 @@
     <p>
       Exporting a formatted, two-page PDF is a paid feature. Complete checkout and you’ll be returned here automatically.
     </p>
-    <div class="_inline _actions-mobile">
+    <div class="_row _actions-mobile" style="margin-top:8px;">
       <button id="pw_payBtn" class="_btn _good" type="button">Go to Checkout</button>
       <button id="pw_closeBtn" class="_btn _secondary" type="button">Close</button>
     </div>
@@ -344,4 +348,3 @@
 <script src="./icdce.js"></script>
 </body>
 </html>
-
