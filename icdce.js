@@ -1,6 +1,6 @@
 /* ===== ICD Cost Estimator — Contingency-only, colored slider, PDF, Paywall ===== */
 document.addEventListener('DOMContentLoaded', function () {
-  /* ---------- Small utility ---------- */
+  /* ---------- Small utilities ---------- */
   function whenReady(ids, cb, attempts = 20) {
     const els = ids.map(id => document.getElementById(id));
     if (els.every(Boolean)) { cb.apply(null, els); return; }
@@ -8,41 +8,58 @@ document.addEventListener('DOMContentLoaded', function () {
     setTimeout(function () { whenReady(ids, cb, attempts - 1); }, 100);
   }
   function $(id) { return document.getElementById(id); }
+  function tryJSON(fn, fallback) { try { return fn(); } catch (_) { return fallback; } }
 
-  /* ---------- Paywall Config (edit these) ---------- */
-  // 1) Your Stripe Payment Link (no params added here)
+  /* ---------- Paywall / Persistence Config (edit these) ---------- */
+  // Your Stripe Payment Link (no params added here)
   const PAY_URL = 'https://buy.stripe.com/4gMdR95Gl9cdddLch09MY00';
-  // 2) Redirect success flag (set your Stripe link to return to this page with ?paid=1)
+  // Stripe should return users to this page with ?paid=1 (configure in Stripe Payment Link settings)
   const SUCCESS_PARAM = 'paid';
-  // 3) Optional manual access code; set to '' to disable
+  // Optional access code for manual unlock; set '' to disable
   const ACCESS_CODE = 'FREE99';
-  // 4) Storage key to remember unlock on this domain
-  const STORE_KEY = 'icdce_paid_test1d';
+  // localStorage keys
+  const STORE_KEY_PAID   = 'icdce_paid_test1d';
+  const STORE_KEY_INPUTS = 'icdce_inputs_v1';
 
   /* ---------- Paywall helpers ---------- */
-  function isPaid() { try { return localStorage.getItem(STORE_KEY) === 'yes'; } catch (_) { return false; } }
-  function setPaid() { try { localStorage.setItem(STORE_KEY, 'yes'); } catch (_) { /* ignore */ } }
-  function clearPaid() { try { localStorage.removeItem(STORE_KEY); } catch (_) { /* ignore */ } }
+  function isPaid() { return tryJSON(() => localStorage.getItem(STORE_KEY_PAID) === 'yes', false); }
+  function setPaid() { tryJSON(() => localStorage.setItem(STORE_KEY_PAID, 'yes')); }
+  function clearPaid() { tryJSON(() => localStorage.removeItem(STORE_KEY_PAID)); }
 
-  // If redirected back with ?paid=1/true → mark paid and clean URL
+  // Restore saved inputs (if any)
+  function loadSavedInputs() {
+    return tryJSON(() => JSON.parse(localStorage.getItem(STORE_KEY_INPUTS) || 'null'), null);
+  }
+  function saveInputs(inp) {
+    tryJSON(() => localStorage.setItem(STORE_KEY_INPUTS, JSON.stringify(inp)));
+  }
+
+  // If redirected back with ?paid=1/true → mark paid and clean URL (but do NOT clear saved inputs)
   (function checkPaidReturn() {
-    try {
-      const usp = new URLSearchParams(window.location.search);
-      const val = usp.get(SUCCESS_PARAM);
-      if (val === '1' || val === 'true') {
-        setPaid();
-        if (history && history.replaceState) {
-          usp.delete(SUCCESS_PARAM);
-          const clean = window.location.pathname + (usp.toString() ? '?' + usp.toString() : '');
-          history.replaceState({}, document.title, clean);
-        }
+    const usp = new URLSearchParams(window.location.search || '');
+    const val = usp.get(SUCCESS_PARAM);
+    if (val === '1' || val === 'true') {
+      setPaid();
+      // Clean the URL so refreshing doesn’t keep re-triggering this
+      if (history && history.replaceState) {
+        usp.delete(SUCCESS_PARAM);
+        const clean = window.location.pathname + (usp.toString() ? '?' + usp.toString() : '');
+        history.replaceState({}, document.title, clean);
       }
-    } catch (e) { /* ignore */ }
+    }
   })();
 
   function openPaywall() {
     const el = $('icdce_paywall');
-    if (!el) { window.location.href = PAY_URL; return; } // graceful fallback
+    if (!el) {
+      // Fallback: navigate entire tab (top) to Stripe (works even if this page is inside a builder iframe)
+      try {
+        (window.top || window).location.assign(PAY_URL);
+      } catch {
+        window.location.href = PAY_URL;
+      }
+      return;
+    }
     el.style.display = 'flex';
     el.setAttribute('aria-hidden', 'false');
   }
@@ -52,7 +69,16 @@ document.addEventListener('DOMContentLoaded', function () {
     el.style.display = 'none';
     el.setAttribute('aria-hidden', 'true');
   }
-  function gotoCheckout() { window.location.href = PAY_URL; }
+  function gotoCheckout() {
+    // Save current inputs before leaving so we can restore after return
+    const inp = getInputs();
+    if (inp && (inp.sf || 0) > 0) saveInputs(inp);
+    try {
+      (window.top || window).location.assign(PAY_URL);
+    } catch {
+      window.location.href = PAY_URL;
+    }
+  }
 
   /* ---------- Estimator Config & Helpers ---------- */
   var CONFIG = {
@@ -157,6 +183,50 @@ document.addEventListener('DOMContentLoaded', function () {
       inflationPower: $('ce_inflationPower')?.value || "onsite",
       lightning: !!$('ce_lightning')?.checked
     };
+  }
+
+  function setInputs(inp) {
+    // Populate UI controls from a saved input object
+    if (!inp) return;
+    function setVal(id, val) { const el = $(id); if (el) el.value = val; }
+    function setChk(id, val) { const el = $(id); if (el) el.checked = !!val; }
+
+    setVal('ce_sf', inp.sf);
+    setVal('ce_region', String(inp.regionPreset || 1));
+    setVal('ce_regionIdx', String(inp.regionIdx || 1));
+    setVal('ce_finish', String(inp.finish || 1));
+    setVal('ce_domes', inp.domes || '1');
+    setVal('ce_height', inp.height || 'std');
+    setVal('ce_glazing', String(inp.glazing || 0.2));
+    setVal('ce_basement', inp.basement || 'none');
+    setVal('ce_site', inp.site || 'flat');
+    setVal('ce_mep', inp.mep || 'standard');
+    setVal('ce_baths', String(inp.baths || 2));
+    setChk('ce_incSitework', inp.includeSitework);
+    if (inp.opts) {
+      setChk('ce_optSolar', inp.opts.solar);
+      setChk('ce_optStorage', inp.opts.storage);
+      setChk('ce_optGeo', inp.opts.geo);
+      setChk('ce_optRain', inp.opts.rain);
+      setChk('ce_optSeptic', inp.opts.septic);
+      setChk('ce_optHydronic', inp.opts.hydronic);
+      setChk('ce_optDriveway', inp.opts.driveway);
+    }
+    setVal('ce_driveLen', String(inp.drivewayLen || 0));
+    setVal('ce_contPct', String(Math.round((inp.contPct || 0.10) * 1000) / 10));
+    setVal('ce_diameter', String(inp.diameter || 0));
+    setVal('ce_shellThk', String(inp.shellThk || 4));
+    setVal('ce_mixType', inp.mixType || 'std');
+    setVal('ce_oculusCount', String(inp.oculusCount || 0));
+    setVal('ce_connector', inp.connector || 'none');
+    setVal('ce_remote', inp.remote || 'easy');
+    setVal('ce_inflationPower', inp.inflationPower || 'onsite');
+    setChk('ce_lightning', inp.lightning);
+
+    // Visual helpers
+    updateRangeFill($('ce_regionIdx'));
+    updateRegionIdxBadge();
+    toggleDrivewayInputs();
   }
 
   function bathFactors(inp) {
@@ -523,9 +593,9 @@ document.addEventListener('DOMContentLoaded', function () {
       ' • ' + est.inp.baths + ' bath' + (est.inp.baths > 1 ? 's' : '') +
       " • Shell " + est.inp.shellThk + "″" +
       " • Mix: " + (est.inp.mixType === 'pozz' ? 'Pozzolan' : (est.inp.mixType === 'hemp' ? 'Hempcrete' : 'Standard')) +
-      (inp.connector !== "none" ? " • Connector: " + inp.connector : "") +
-      (inp.oculusCount > 0 ? " • Oculus: " + inp.oculusCount : "") +
-      " • Access: " + inp.remote +
+      (est.inp.connector !== "none" ? " • Connector: " + est.inp.connector : "") +
+      (est.inp.oculusCount > 0 ? " • Oculus: " + est.inp.oculusCount : "") +
+      " • Access: " + est.inp.remote +
       " • Contingency: " + (est.inp.contPct * 100).toFixed(1) + "%" +
       " • Inflation power: " + (est.inp.inflationPower === 'generator' ? 'Generator' : 'On-site');
     var asumLines = doc.splitTextToSize(assumptions, maxW);
@@ -612,6 +682,8 @@ document.addEventListener('DOMContentLoaded', function () {
     $('ce_calcBtn').addEventListener('click', function () {
       var inp = getInputs();
       var est = compute(inp);
+      // save inputs for restore (user will likely export right after)
+      saveInputs(inp);
       lastInputs = inp; lastEstimate = est;
       render(est);
     });
@@ -642,6 +714,9 @@ document.addEventListener('DOMContentLoaded', function () {
       if ($('ce_lightning')) $('ce_lightning').checked = false;
       if ($('ce_contPct')) $('ce_contPct').value = "10";
 
+      // wipe saved inputs
+      tryJSON(() => localStorage.removeItem(STORE_KEY_INPUTS));
+
       var zero = {
         totals: { low: 0, high: 0, lowPSF: 0, highPSF: 0, structurePSFout: 0, preLow: 0, preHigh: 0, contLow: 0, contHigh: 0 },
         base: { structureCost: 0, glazingCost: 0, basementLow: 0, basementHigh: 0 },
@@ -657,7 +732,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
-  // Export PDF (guarded by paywall) — single handler
+  // Export PDF (guarded by paywall)
   whenReady(['ce_printBtn'], function () {
     $('ce_printBtn').addEventListener('click', async function () {
       var inp = lastInputs || getInputs();
@@ -689,16 +764,31 @@ document.addEventListener('DOMContentLoaded', function () {
     });
   });
 
-  /* ---------- Init ---------- */
-  applyRegionPreset();
-  toggleDrivewayInputs();
-  updateRegionIdxBadge();
-  updateRangeFill($('ce_regionIdx'));
-  render({
-    totals: { low: 0, high: 0, lowPSF: 0, highPSF: 0, structurePSFout: 0, preLow: 0, preHigh: 0, contLow: 0, contHigh: 0 },
-    base: { structureCost: 0, glazingCost: 0, basementLow: 0, basementHigh: 0 },
-    parts: { regionFactor: 1, optsSum: 0, optLabels: [], shell: null, sitework: { low: 0, high: 0, included: true } },
-    items: [],
-    inp: { finish: 1, glazing: .2, domes: '1', height: 'std', site: 'flat', mep: 'standard', sf: 0, contPct: 0.10, opts: {}, baths: 2, expectedBaths: 1, drivewayLen: 0, includeSitework: true, basement: 'none', shellThk: 4, mixType: "std", oculusCount: 0, connector: "none", remote: "easy", inflationPower: "onsite", lightning: false }
-  });
+  /* ---------- Init: restore inputs if available, then render ---------- */
+  (function init() {
+    // Apply presets/visuals
+    applyRegionPreset();
+    toggleDrivewayInputs();
+    updateRegionIdxBadge();
+    updateRangeFill($('ce_regionIdx'));
+
+    // If we have saved inputs, restore them and compute immediately (nice after Stripe return)
+    const saved = loadSavedInputs();
+    if (saved && (saved.sf || 0) > 0) {
+      setInputs(saved);
+      const freshInp = getInputs();
+      const est = compute(freshInp);
+      lastInputs = freshInp; lastEstimate = est;
+      render(est);
+    } else {
+      // Initial blank render
+      render({
+        totals: { low: 0, high: 0, lowPSF: 0, highPSF: 0, structurePSFout: 0, preLow: 0, preHigh: 0, contLow: 0, contHigh: 0 },
+        base: { structureCost: 0, glazingCost: 0, basementLow: 0, basementHigh: 0 },
+        parts: { regionFactor: 1, optsSum: 0, optLabels: [], shell: null, sitework: { low: 0, high: 0, included: true } },
+        items: [],
+        inp: { finish: 1, glazing: .2, domes: '1', height: 'std', site: 'flat', mep: 'standard', sf: 0, contPct: 0.10, opts: {}, baths: 2, expectedBaths: 1, drivewayLen: 0, includeSitework: true, basement: 'none', shellThk: 4, mixType: "std", oculusCount: 0, connector: "none", remote: "easy", inflationPower: "onsite", lightning: false }
+      });
+    }
+  })();
 });
