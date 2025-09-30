@@ -252,6 +252,9 @@
   to{ transform:translateX(-50%) translateY(10px); opacity:1; }
 }
 
+/* Rotate tip (icon + text appears in HTML near table title) */
+#icdce ._results-pad ._hint svg{ opacity:.85; }
+
 /* Paywall modal */
 #icdce ._modalBackdrop{
   position:fixed; inset:0; background:rgba(0,0,0,.45);
@@ -271,9 +274,6 @@
 
 /* Action groups */
 #icdce ._actions-mobile{ display:flex; gap:10px; flex-wrap:wrap; }
-
-/* Rotate tip (icon + text already in HTML) */
-#icdce ._results-pad ._hint svg{ opacity:.85; }
 
 /* Responsive */
 @media (max-width:980px){
@@ -297,10 +297,7 @@
    - Professional two-tone header, chips, and summary cards
    ========================================================================== */
 
-@page{
-  size:auto;
-  margin:18mm;
-}
+@page{ size:auto; margin:18mm; }
 html.printing, body.printing{
   -webkit-print-color-adjust: exact !important;
   print-color-adjust: exact !important;
@@ -314,10 +311,8 @@ html.printing, body.printing{
 .printing #icdce ._pill{ display:none !important; }
 
 /* PDF Header */
-#printing, .printing #pdf_header{
+.printing #pdf_header{
   display:flex !important;
-}
-#printing, .printing #pdf_header{
   justify-content:space-between; align-items:flex-start;
   gap:16px; margin:0 0 14px 0; padding:12px 16px;
   border:1px solid #dbe3ef; border-radius:10px;
@@ -325,24 +320,24 @@ html.printing, body.printing{
   color:#e9f0ff;
   box-shadow:0 6px 18px rgba(0,0,0,.12);
 }
-#printing, .printing #pdf_header ._title{
+.printing #pdf_header ._title{
   margin:0; font-size:18px; font-weight:900; letter-spacing:.2px; color:#ffffff;
 }
-#printing, .printing #pdf_header ._subtitle{
+.printing #pdf_header ._subtitle{
   margin:4px 0 0 0; font-size:12px; color:#cfe0ff;
 }
-#printing, .printing #pdf_header ._badge{
+.printing #pdf_header ._badge{
   background:linear-gradient(180deg, var(--good), var(--good-700));
   border:none; color:#fff; font-weight:800;
   padding:6px 10px; border-radius:999px; display:inline-block; margin-bottom:8px;
   box-shadow:0 2px 8px rgba(0,0,0,.18);
 }
-#printing, .printing #pdf_header #pdf_meta{
+.printing #pdf_header #pdf_meta{
   font-size:12px; line-height:1.4; color:#e9f3ff;
   display:grid; gap:2px;
 }
-#printing, .printing #pdf_header ._left{ flex:1 1 auto; }
-#printing, .printing #pdf_header ._right{ flex:0 0 auto; text-align:right; }
+.printing #pdf_header ._left{ flex:1 1 auto; }
+.printing #pdf_header ._right{ flex:0 0 auto; text-align:right; }
 
 /* Assumptions (chips) */
 .printing #pdf_assump_hdg{
@@ -379,6 +374,9 @@ html.printing, body.printing{
   border-bottom:1px solid #e6edf7 !important;
 }
 
+/* Optional: flatten shadows on print panels */
+.printing #icdce ._panel{ box-shadow:none; border-color:#e6edf7; }
+
 /* Footer */
 .printing #pdf_footer{
   display:block !important;
@@ -387,5 +385,5 @@ html.printing, body.printing{
   font-size:11px; color:#64748b;
 }
 
-/* Page breaks (if needed for very long tables) */
-.printing .page-break{ page-break-before:always; }
+/* Page breaks for long content */
+.printing .page-break{ page-break-before: always; }
