@@ -5,13 +5,55 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>ICD Cost Estimator™</title>
 
+  <!-- Meta -->
   <meta name="description" content="Planning-level budgeting tool for Insulated Concrete Domes (ICD). All client-side; no data leaves your browser." />
   <meta name="theme-color" content="#001f3f" />
 
+  <!-- Styles -->
   <link rel="stylesheet" href="./icdce.css" />
+  <style>
+    /* Sticky action bar (always visible on mobile) */
+    #icdce ._stickybar{
+      position:sticky; bottom:0; z-index:50; inset-inline:0;
+      display:flex; gap:10px; justify-content:space-between; align-items:center;
+      padding:10px 12px; background:rgba(255,255,255,.96); backdrop-filter:saturate(1.2) blur(6px);
+      border-top:1px solid var(--border-color);
+    }
+    #icdce ._stickybar ._btn{ flex:1 1 auto; }
+    #icdce ._stickybar ._btn._good._unlocked{
+      box-shadow:0 0 0 2px rgba(52,168,83,.35) inset;
+    }
+
+    /* Little “unlocked” toast */
+    #icdce #icdce_unlocked{
+      position:fixed; left:50%; transform:translateX(-50%) translateY(10px);
+      top:10px; z-index:60; padding:10px 14px; border-radius:999px;
+      background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0;
+      font:500 14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      display:none; align-items:center; gap:10px; box-shadow:0 10px 20px rgba(0,0,0,.08);
+    }
+    #icdce #icdce_unlocked._show{ display:flex; animation: slideDown .35s ease-out; }
+    @keyframes slideDown{
+      from{ transform:translateX(-50%) translateY(-14px); opacity:0; }
+      to{ transform:translateX(-50%) translateY(10px); opacity:1; }
+    }
+
+    /* Make option rows friendlier on phones */
+    ._inline._inline-wrap label{ margin-right:8px; }
+    ._inline._inline-stack{ flex-direction:column; align-items:flex-start; }
+  </style>
 </head>
 <body>
   <div id="icdce">
+    <!-- Unlock toast (auto shown after Stripe success) -->
+    <div id="icdce_unlocked" aria-live="polite" role="status">
+      <!-- simple checkmark -->
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M20 6L9 17l-5-5" stroke="#065f46" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      PDF export unlocked — tap “Export PDF”.
+    </div>
+
     <div class="_wrap">
       <!-- Brand bar -->
       <div class="_brandbar _wrap-mobile">
@@ -41,7 +83,7 @@
                 <option value="1.15">High-cost metro (1.15)</option>
                 <option value="1.30">Very high (1.30)</option>
               </select>
-              <div class="_hint">Pick the closest preset: rural/smaller markets → Low-cost; coastal/big metros → Very high.</div>
+              <div class="_hint">Rural/smaller markets → Low-cost; coastal/big metros → Very high.</div>
             </div>
 
             <div class="_field _wide">
@@ -78,7 +120,7 @@
                 <option value="1.20">Premium (upgraded surfaces)</option>
                 <option value="1.35">Luxury (custom &amp; high-end)</option>
               </select>
-              <div class="_hint">Affects interior &amp; allowance buckets (not the base shell).</div>
+              <div class="_hint">Affects interior & allowances (not the base shell).</div>
             </div>
 
             <div class="_field">
@@ -181,7 +223,7 @@
                 <option value="moderate">Moderate slopes/trees</option>
                 <option value="complex">Steep/rocky or long access</option>
               </select>
-              <div class="_hint">Harder sites need more excavation time, access work, and equipment.</div>
+              <div class="_hint">Harder sites need more excavation time, access work, equipment.</div>
             </div>
 
             <div class="_field">
@@ -296,7 +338,7 @@
           </div>
 
           <h3 class="_results-title">Line-Item Breakdown</h3>
-          <div class="_panel _table-scroll">
+          <div class="_panel _breakdown">
             <table>
               <thead>
                 <tr>
@@ -323,6 +365,14 @@
       </div>
     </div>
 
+    <!-- Sticky action bar (always visible) -->
+    <div class="_stickybar" id="icdce_sticky" role="region" aria-label="Quick actions">
+      <button class="_btn" type="button" onclick="document.getElementById('ce_calcBtn')?.click()">Calculate</button>
+      <button class="_btn _good" type="button" onclick="document.getElementById('ce_printBtn')?.click()" id="icdce_export_quick">
+        Export PDF
+      </button>
+    </div>
+
     <!-- Paywall Modal -->
     <div id="icdce_paywall" class="_modalBackdrop" aria-hidden="true">
       <div class="_modal" role="dialog" aria-modal="true" aria-labelledby="pw_title">
@@ -343,7 +393,40 @@
     </div>
   </div>
 
+  <!-- App JS -->
   <script src="./icdce.js"></script>
+
+  <!-- Tiny helper: show “unlocked” toast + highlight Export button after Stripe return -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      // IMPORTANT: this must match STORE_KEY in icdce.js
+      var STORE_KEY = 'icdce_paid_test1d';
+
+      try {
+        var unlocked = (localStorage.getItem(STORE_KEY) === 'yes');
+        if (unlocked) {
+          // Show toast
+          var toast = document.getElementById('icdce_unlocked');
+          if (toast) {
+            toast.classList.add('_show');
+            setTimeout(function(){ toast.classList.remove('_show'); }, 4200);
+          }
+          // Subtle highlight on sticky Export
+          var quick = document.getElementById('icdce_export_quick');
+          if (quick) {
+            quick.classList.add('_unlocked');
+            setTimeout(function(){ quick.classList.remove('_unlocked'); }, 5000);
+          }
+          // Ensure quick action bar is in view (in case user is mid-page)
+          var sticky = document.getElementById('icdce_sticky');
+          if (sticky && sticky.scrollIntoView) {
+            sticky.scrollIntoView({ behavior: 'smooth', block: 'end' });
+          }
+        }
+      } catch (e) { /* ignore */ }
+    });
+  </script>
+
   <noscript>Please enable JavaScript to use the ICD Cost Estimator.</noscript>
 </body>
 </html>
