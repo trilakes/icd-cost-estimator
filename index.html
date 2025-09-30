@@ -1,3 +1,350 @@
-<link rel="stylesheet" href="./icdce.css" />
-<div id="icdce"> ...your estimator HTML block here... </div>
-<script src="./icdce.js"></script>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ICD Cost Estimator™</title>
+
+  <!-- Your external CSS (no <style> tags in the file itself) -->
+  <link rel="stylesheet" href="./icdce.css" />
+</head>
+<body>
+  <!-- ===== Estimator UI ===== -->
+  <div id="icdce">
+    <div class="_wrap">
+      <div class="_brandbar" style="flex-wrap:wrap;">
+        <div class="_brandleft" style="flex-wrap:wrap;">
+          <div class="_mark">ICD Cost Estimator<span>™</span></div>
+          <div class="_tagline">Planning-level budgeting for Insulated Concrete Domes</div>
+        </div>
+        <span class="_pill">Client-side • No data leaves your browser</span>
+      </div>
+
+      <div class="_panel" role="region" aria-label="ICD Cost Estimator">
+        <!-- Project Basics -->
+        <div class="_section _project-basics">
+          <h2 class="_sectionTitle">Project Basics</h2>
+          <div class="_grid">
+            <div class="_field">
+              <label class="_label">Conditioned SF</label>
+              <input id="ce_sf" class="_input" type="number" min="0" step="50" placeholder="e.g., 2000" />
+              <div class="_hint">Total conditioned square footage.</div>
+            </div>
+
+            <div class="_field">
+              <label class="_label">Region</label>
+              <select id="ce_region" class="_input">
+                <option value="1.00">Standard (1.00)</option>
+                <option value="0.90">Low-cost (0.90)</option>
+                <option value="1.15">High-cost metro (1.15)</option>
+                <option value="1.30">Very high (1.30)</option>
+              </select>
+              <div class="_hint">Pick the closest preset: rural/smaller markets → Low-cost; coastal/big metros → Very high.</div>
+            </div>
+
+            <div class="_field _wide">
+              <label class="_label">Region Cost Index (fine-tune)</label>
+              <div class="_inline">
+                <input id="ce_regionIdx" class="_input" type="range" min="0.80" max="1.40" step="0.01" value="1.00" list="ce_regionTicks" />
+                <span class="_badge" id="ce_regionIdxVal">1.00</span>
+              </div>
+              <datalist id="ce_regionTicks">
+                <option value="0.80"></option><option value="0.90"></option><option value="1.00"></option>
+                <option value="1.10"></option><option value="1.20"></option><option value="1.30"></option><option value="1.40"></option>
+              </datalist>
+              <div class="_ticks"><span>0.80</span><span>0.90</span><span>1.00</span><span>1.10</span><span>1.20</span><span>1.30</span><span>1.40</span></div>
+              <div class="_hint">Slide until Base Shell $/SF roughly matches your recent jobs.</div>
+            </div>
+
+            <div class="_field">
+              <label class="_label">Dome Diameter (ft)</label>
+              <input id="ce_diameter" class="_input" type="number" min="20" step="1" placeholder="e.g., 50" />
+              <div class="_hint">Used for planning-level checks.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Design & Envelope -->
+        <div class="_section _design-envelope">
+          <h2 class="_sectionTitle">Design &amp; Envelope</h2>
+          <div class="_grid">
+            <div class="_field">
+              <label class="_label">Finish Level</label>
+              <select id="ce_finish" class="_input">
+                <option value="0.95">Basic (durable &amp; simple)</option>
+                <option value="1.00" selected>Standard (balanced)</option>
+                <option value="1.20">Premium (upgraded surfaces)</option>
+                <option value="1.35">Luxury (custom &amp; high-end)</option>
+              </select>
+              <div class="_hint">Affects interior &amp; allowance buckets (not the base shell).</div>
+            </div>
+
+            <div class="_field">
+              <label class="_label"># of Domes</label>
+              <select id="ce_domes" class="_input">
+                <option value="1">1 (single)</option>
+                <option value="2">2 (compound)</option>
+                <option value="3">3+</option>
+              </select>
+              <div class="_hint">More domes → more interfaces/openings; slightly higher cost.</div>
+            </div>
+
+            <div class="_field">
+              <label class="_label">Shell Height</label>
+              <select id="ce_height" class="_input">
+                <option value="std">Standard</option>
+                <option value="tall">Tall (+ loft potential)</option>
+              </select>
+              <div class="_hint">Tall shells add staging time and reinforcement complexity.</div>
+            </div>
+
+            <div class="_field">
+              <label class="_label">Glazing % of Envelope</label>
+              <select id="ce_glazing" class="_input">
+                <option value="0.10">~10% (minimal)</option>
+                <option value="0.20" selected>~20% (typical)</option>
+                <option value="0.30">~30% (bright)</option>
+                <option value="0.40">~40% (panoramic)</option>
+              </select>
+              <div class="_hint">Higher % adds both glazing SF and unit cost.</div>
+            </div>
+
+            <div class="_field">
+              <label class="_label">Basement</label>
+              <select id="ce_basement" class="_input">
+                <option value="none">None (slab)</option>
+                <option value="partial">Partial</option>
+                <option value="full">Full</option>
+              </select>
+              <div class="_hint">Adds excavation, walls, slab, stairs, and egress where required.</div>
+            </div>
+
+            <div class="_field">
+              <label class="_label">Shell Concrete Thickness (inches)</label>
+              <select id="ce_shellThk" class="_input">
+                <option value="4">4″ (standard)</option>
+                <option value="5">5″</option>
+                <option value="6">6″</option>
+              </select>
+              <div class="_hint">Thicker shell for higher wind/seismic.</div>
+            </div>
+
+            <div class="_field">
+              <label class="_label">Shotcrete / Mix Type</label>
+              <select id="ce_mixType" class="_input">
+                <option value="std">Standard Portland</option>
+                <option value="pozz">Pozzolan (volcanic ash) blend</option>
+                <option value="hemp">Hempcrete (experimental)</option>
+              </select>
+              <div class="_hint">Alters material cost; consult engineer.</div>
+            </div>
+
+            <div class="_field">
+              <label class="_label">Oculus / Skylight Count</label>
+              <input id="ce_oculusCount" class="_input" type="number" min="0" step="1" value="0" />
+            </div>
+
+            <div class="_field">
+              <label class="_label">Connector / Tunnel</label>
+              <select id="ce_connector" class="_input">
+                <option value="none">None</option>
+                <option value="short">Short (≤10 ft)</option>
+                <option value="med">Medium (11–25 ft)</option>
+                <option value="long">Long (25+ ft)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Site & Systems -->
+        <div class="_section _site-systems">
+          <h2 class="_sectionTitle">Site &amp; Systems</h2>
+          <div class="_grid">
+            <div class="_field">
+              <label class="_label">Bathrooms</label>
+              <select id="ce_baths" class="_input">
+                <option value="1">1 bath</option>
+                <option value="2" selected>2 baths</option>
+                <option value="3">3 baths</option>
+                <option value="4">4 baths</option>
+                <option value="5">5+ baths</option>
+              </select>
+              <div class="_hint">Adjusts plumbing/electrical fixture density and small systems.</div>
+            </div>
+
+            <div class="_field">
+              <label class="_label">Site Difficulty</label>
+              <select id="ce_site" class="_input">
+                <option value="flat">Flat &amp; clear</option>
+                <option value="moderate">Moderate slopes/trees</option>
+                <option value="complex">Steep/rocky or long access</option>
+              </select>
+              <div class="_hint">Harder sites need more excavation time, access work, and equipment.</div>
+            </div>
+
+            <div class="_field">
+              <label class="_label">MEP Complexity</label>
+              <select id="ce_mep" class="_input">
+                <option value="simple">Simple</option>
+                <option value="standard" selected>Standard</option>
+                <option value="advanced">Advanced (zoning/HRV)</option>
+              </select>
+              <div class="_hint">Mechanical first, then Electrical and Plumbing sophistication.</div>
+            </div>
+
+            <div class="_field">
+              <label class="_label">Remoteness / Access</label>
+              <select id="ce_remote" class="_input">
+                <option value="easy">Easy (paved &amp; close)</option>
+                <option value="moderate">Moderate</option>
+                <option value="remote">Remote (long access / off-grid)</option>
+              </select>
+            </div>
+
+            <div class="_field">
+              <label class="_label">Inflation Power</label>
+              <select id="ce_inflationPower" class="_input">
+                <option value="onsite">On-site power</option>
+                <option value="generator">Generator</option>
+              </select>
+            </div>
+
+            <div class="_field _wide">
+              <label class="_label">Include Sitework &amp; Rough Grading</label>
+              <div class="_inline">
+                <input type="checkbox" id="ce_incSitework" />
+                <span>Include sitework in estimate</span>
+              </div>
+              <div class="_hint">Toggle to include sitework costs.</div>
+            </div>
+
+            <div class="_field">
+              <label class="_label" for="ce_lightning">Lightning Protection</label>
+              <div class="_inline">
+                <input type="checkbox" id="ce_lightning" />
+                <span>Lightning protection / grounding</span>
+              </div>
+            </div>
+
+            <div class="_field _wide">
+              <label class="_label">Optional Systems</label>
+              <div class="_inline" style="flex-wrap:wrap;">
+                <label style="margin-right:8px;"><input type="checkbox" id="ce_optSolar" /> Solar PV (+$20k)</label>
+                <label style="margin-right:8px;"><input type="checkbox" id="ce_optStorage" /> Battery Storage (+$18k)</label>
+                <label style="margin-right:8px;"><input type="checkbox" id="ce_optGeo" /> Geothermal (+$45k)</label>
+                <label style="margin-right:8px;"><input type="checkbox" id="ce_optRain" /> Rainwater collection / cistern (+$12k)</label>
+                <label style="margin-right:8px;"><input type="checkbox" id="ce_optSeptic" /> Septic (+$35k)</label>
+                <label style="margin-right:8px;"><input type="checkbox" id="ce_optHydronic" /> Hydronic radiant floors (+$20k)</label>
+              </div>
+              <div class="_hint">Planning-level adders you can toggle on/off.</div>
+            </div>
+
+            <div class="_field _wide">
+              <label class="_label">Driveway (optional)</label>
+              <div class="_inline" style="flex-wrap:wrap;">
+                <label style="margin-right:8px;"><input type="checkbox" id="ce_optDriveway" /> Include driveway</label>
+                <input id="ce_driveLen" class="_input" type="number" min="0" max="150" step="5" value="100" style="width:160px" />
+              </div>
+              <div class="_hint">Length in feet (0–150). Budget uses ~ $80/ft × region × site.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Contingency Only -->
+        <div class="_section _soft-cont">
+          <h2 class="_sectionTitle">Contingency</h2>
+          <div class="_grid">
+            <div class="_field">
+              <label class="_label">Contingency %</label>
+              <input id="ce_contPct" class="_input" type="number" min="0" max="100" step="0.1" value="10" />
+              <div class="_hint">Common planning allowance is 5–15% depending on risk.</div>
+            </div>
+            <div class="_field _full">
+              <div class="_inline" style="justify-content:flex-end;gap:10px;flex-wrap:wrap;">
+                <button id="ce_calcBtn" class="_btn">Calculate</button>
+                <button id="ce_clearBtn" class="_btn _secondary">Clear</button>
+                <button id="ce_printBtn" class="_btn _good">Export PDF</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Results -->
+        <div style="padding:20px">
+          <div class="_cards" style="grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;">
+            <div class="_card">
+              <h3>Estimated Range</h3>
+              <div class="_big" id="ce_rangeTotal">$0 – $0</div>
+              <div class="_small" id="ce_rangePerSf">$/SF: $0 – $0</div>
+            </div>
+            <div class="_card">
+              <h3>Base Dome Shell (Airform, Foam, Rebar, Shotcrete)</h3>
+              <div class="_big" id="ce_baseTotal">$0</div>
+              <div class="_small" id="ce_basePsf">$/SF: $0</div>
+            </div>
+            <div class="_card">
+              <h3>Sitework &amp; Rough Grading</h3>
+              <div class="_big" id="ce_siteworkTotal">$0 – $0</div>
+              <div class="_small" id="ce_siteworkNote">Included</div>
+            </div>
+            <div class="_card" style="grid-column:1 / -1;">
+              <h3>Assumptions</h3>
+              <div class="_small" id="ce_assumptions">Region 1.00 • Standard finish • Typical glazing • Single dome</div>
+            </div>
+          </div>
+
+          <h3 style="margin:20px 0 10px;color:var(--secondary-color)">Line-Item Breakdown</h3>
+          <div class="_panel" style="border:1px solid var(--border-color);border-radius:12px;overflow:auto;max-height:400px;">
+            <table style="width:100%;">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th>Description</th>
+                  <th class="_right">Low</th>
+                  <th class="_right">High</th>
+                </tr>
+              </thead>
+              <tbody id="ce_breakdown">
+                <tr>
+                  <td colspan="4" class="_muted" style="text-align:center;padding:18px">
+                    Run a calculation to see details.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="margin-top:16px;font-size:12px;color:#475569;line-height:1.5">
+            <strong>Important:</strong> Planning-level estimate only (not a bid). Final costs depend on site, engineering, and trade bids.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Paywall Modal -->
+    <div id="icdce_paywall" class="_modalBackdrop" aria-hidden="true">
+      <div class="_modal" role="dialog" aria-modal="true" aria-labelledby="pw_title">
+        <h3 id="pw_title">Export PDF</h3>
+        <p>Exporting a formatted, two-page PDF is a paid feature. Complete checkout and you’ll be returned here automatically.</p>
+        <div class="_row">
+          <button id="pw_payBtn" class="_btn _good">Go to Checkout</button>
+          <button id="pw_closeBtn" class="_btn _secondary" type="button">Close</button>
+        </div>
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:14px 0;">
+        <p style="margin-bottom:6px;">Already paid? Enter your access code or use a paid return link.</p>
+        <div class="_codeRow">
+          <input id="pw_code" class="_input" type="text" placeholder="Access code (optional)" />
+          <button id="pw_apply" class="_btn" type="button">Apply Code</button>
+        </div>
+        <div id="pw_msg" class="_hint" style="margin-top:8px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== App JS (must be after the HTML so elements exist) ===== -->
+  <script src="./icdce.js"></script>
+
+  <!-- Optional: show a message if JS is disabled -->
+  <noscript>Please enable JavaScript to use the ICD Cost Estimator.</noscript>
+</body>
+</html>
