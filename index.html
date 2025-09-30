@@ -5,15 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>ICD Cost Estimator™</title>
 
-  <!-- Meta -->
-  <meta name="description" content="Planning-level budgeting tool for Insulated Concrete Domes (ICD). All client-side; no data leaves your browser." />
-  <meta name="theme-color" content="#0f172a" />
+  <meta name="description" content="Pro-grade cost planning & modeling for Insulated Concrete Domes. All client-side; no data leaves your browser." />
+  <meta name="theme-color" content="#0b1a2a" />
 
   <!-- Styles -->
   <link rel="stylesheet" href="./icdce.css" />
 </head>
 <body>
 <div id="icdce">
+
   <!-- Unlock toast -->
   <div id="icdce_unlocked" aria-live="polite" role="status">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -23,301 +23,329 @@
     <button id="icdce_unlocked_btn" class="_btn _good" style="padding:6px 12px;font-size:12px;">Download PDF</button>
   </div>
 
+  <!-- Page wrap -->
   <div class="_wrap">
+
     <!-- Brand bar -->
-    <div class="_brandbar">
+    <div class="_brandbar" role="banner">
       <div class="_brandleft">
         <div class="_mark">ICD Cost Estimator<span>™</span></div>
-        <div class="_tagline">Planning-level budgeting for Insulated Concrete Domes</div>
+        <div class="_tagline">Pro-grade cost planning & modeling for Insulated Concrete Domes</div>
       </div>
       <span class="_pill">Client-side • No data leaves your browser</span>
     </div>
 
-    <!-- Main Panel -->
-    <div class="_panel" role="region" aria-label="ICD Cost Estimator">
-
-      <!-- Project Basics -->
-      <section class="_section _section--boxed _project-basics" aria-labelledby="s_projectBasics">
-        <h2 id="s_projectBasics" class="_sectionTitle">Project Basics</h2>
-        <div class="_grid">
-          <div class="_field">
-            <label class="_label" for="ce_sf">Conditioned SF</label>
-            <input id="ce_sf" class="_input" type="number" min="0" step="50" placeholder="e.g., 2000" />
-            <div class="_hint">Total conditioned square footage.</div>
-          </div>
-
-          <div class="_field">
-            <label class="_label" for="ce_region">Region</label>
-            <select id="ce_region" class="_input">
-              <option value="1.00">Standard (1.00)</option>
-              <option value="0.90">Low-cost (0.90)</option>
-              <option value="1.15">High-cost metro (1.15)</option>
-              <option value="1.30">Very high (1.30)</option>
-            </select>
-            <div class="_hint">Rural/smaller markets → Low-cost; coastal/big metros → Very high.</div>
-          </div>
-
-          <div class="_field">
-            <label class="_label" for="ce_diameter">Dome Diameter (ft)</label>
-            <input id="ce_diameter" class="_input" type="number" min="20" step="1" placeholder="e.g., 50" />
-            <div class="_hint">Used for planning-level checks.</div>
-          </div>
-
-          <div class="_field _wide">
-            <label class="_label" for="ce_regionIdx">Region Cost Index (fine-tune)</label>
-            <div class="_inline _compact">
-              <input id="ce_regionIdx" class="_input _sm" type="range" min="0.80" max="1.40" step="0.01" value="1.00" list="ce_regionTicks" />
-              <span class="_badge _sm" id="ce_regionIdxVal">1.00</span>
-            </div>
-            <datalist id="ce_regionTicks">
-              <option value="0.80"></option><option value="0.90"></option><option value="1.00"></option>
-              <option value="1.10"></option><option value="1.20"></option><option value="1.30"></option><option value="1.40"></option>
-            </datalist>
-            <div class="_ticks _sm"><span>0.80</span><span>0.90</span><span>1.00</span><span>1.10</span><span>1.20</span><span>1.30</span><span>1.40</span></div>
-            <div class="_hint">Slide until Base Shell $/SF roughly matches your recent jobs.</div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Design & Envelope -->
-      <section class="_section _section--boxed _design-envelope" aria-labelledby="s_designEnv">
-        <h2 id="s_designEnv" class="_sectionTitle">Design &amp; Envelope</h2>
-        <div class="_grid">
-          <div class="_field">
-            <label class="_label" for="ce_finish">Finish Level</label>
-            <select id="ce_finish" class="_input">
-              <option value="0.95">Economy</option>
-              <option value="1.00" selected>Standard</option>
-              <option value="1.20">Premium</option>
-              <option value="1.35">Luxury</option>
-            </select>
-          </div>
-
-          <div class="_field">
-            <label class="_label" for="ce_domes">Number of Domes</label>
-            <select id="ce_domes" class="_input">
-              <option value="1" selected>1</option>
-              <option value="2">2</option>
-              <option value="3">3+</option>
-            </select>
-          </div>
-
-          <div class="_field">
-            <label class="_label" for="ce_height">Shell Height</label>
-            <select id="ce_height" class="_input">
-              <option value="std" selected>Standard</option>
-              <option value="tall">Tall</option>
-            </select>
-          </div>
-
-          <div class="_field">
-            <label class="_label" for="ce_glazing">Glazing %</label>
-            <select id="ce_glazing" class="_input">
-              <option value="0.10">10%</option>
-              <option value="0.20" selected>20%</option>
-              <option value="0.30">30%</option>
-              <option value="0.40">40%</option>
-            </select>
-          </div>
-
-          <div class="_field">
-            <label class="_label" for="ce_basement">Basement</label>
-            <select id="ce_basement" class="_input">
-              <option value="none" selected>None</option>
-              <option value="partial">Partial (~50%)</option>
-              <option value="full">Full (~100%)</option>
-            </select>
-          </div>
-
-          <div class="_field">
-            <label class="_label" for="ce_shellThk">Shell Thickness (in)</label>
-            <select id="ce_shellThk" class="_input">
-              <option value="4" selected>4″</option>
-              <option value="5">5″</option>
-              <option value="6">6″</option>
-            </select>
-          </div>
-
-          <div class="_field">
-            <label class="_label" for="ce_mixType">Mix Type</label>
-            <select id="ce_mixType" class="_input">
-              <option value="std" selected>Standard</option>
-              <option value="pozz">Pozzolan</option>
-              <option value="hemp">Hempcrete</option>
-            </select>
-          </div>
-
-          <div class="_field">
-            <label class="_label" for="ce_oculusCount">Oculus / Skylights</label>
-            <input id="ce_oculusCount" class="_input" type="number" min="0" step="1" value="0" />
-          </div>
-
-          <div class="_field">
-            <label class="_label" for="ce_connector">Connector / Tunnel</label>
-            <select id="ce_connector" class="_input">
-              <option value="none" selected>None</option>
-              <option value="short">Short</option>
-              <option value="med">Medium</option>
-              <option value="long">Long</option>
-            </select>
-          </div>
-        </div>
-      </section>
-
-      <!-- Site & Systems -->
-      <section class="_section _section--boxed _site-systems" aria-labelledby="s_siteSystems">
-        <h2 id="s_siteSystems" class="_sectionTitle">Site &amp; Systems</h2>
-        <div class="_grid">
-          <div class="_field">
-            <label class="_label" for="ce_site">Site Conditions</label>
-            <select id="ce_site" class="_input">
-              <option value="flat" selected>Flat / Easy</option>
-              <option value="moderate">Moderate</option>
-              <option value="complex">Complex / Remote</option>
-            </select>
-          </div>
-
-          <div class="_field">
-            <label class="_label" for="ce_mep">MEP Complexity</label>
-            <select id="ce_mep" class="_input">
-              <option value="simple">Simple</option>
-              <option value="standard" selected>Standard</option>
-              <option value="advanced">Advanced</option>
-            </select>
-          </div>
-
-          <div class="_field">
-            <label class="_label" for="ce_baths">Bathrooms</label>
-            <input id="ce_baths" class="_input" type="number" min="1" step="1" value="2" />
-          </div>
-
-          <div class="_field">
-            <label class="_label" for="ce_incSitework">
-              <input type="checkbox" id="ce_incSitework" checked /> Include Sitework
-            </label>
-          </div>
+    <!-- ===== PROJECT BASICS (CARD) ===== -->
+    <section class="_panel _sectionCard" role="region" aria-label="Project Basics">
+      <h2 class="_sectionTitle">Project Basics</h2>
+      <div class="_grid">
+        <div class="_field">
+          <label class="_label" for="ce_sf">Conditioned SF</label>
+          <input id="ce_sf" class="_input" type="number" min="0" step="50" placeholder="e.g., 2000" />
+          <div class="_hint">Heated/cooled interior square footage to be built.</div>
         </div>
 
-        <h3 class="_sectionSubtitle">Optional Systems</h3>
-        <div class="_inline-stack">
-          <label><input type="checkbox" id="ce_optSolar" /> Solar PV</label>
-          <label><input type="checkbox" id="ce_optStorage" /> Battery Storage</label>
-          <label><input type="checkbox" id="ce_optGeo" /> Geothermal</label>
-          <label><input type="checkbox" id="ce_optRain" /> Rainwater / Cistern</label>
-          <label><input type="checkbox" id="ce_optSeptic" /> Septic</label>
-          <label><input type="checkbox" id="ce_optHydronic" /> Hydronic Floors</label>
-          <label><input type="checkbox" id="ce_optDriveway" /> Driveway</label>
+        <div class="_field">
+          <label class="_label" for="ce_region">Region</label>
+          <select id="ce_region" class="_input">
+            <option value="1.00">Standard (1.00)</option>
+            <option value="0.90">Low-cost (0.90)</option>
+            <option value="1.15">High-cost metro (1.15)</option>
+            <option value="1.30">Very high (1.30)</option>
+          </select>
+          <div class="_hint">A quick starting point. Rural/smaller markets lean lower; big coastal cities lean higher.</div>
         </div>
+
         <div class="_field _wide">
-          <label class="_label" for="ce_driveLen">Driveway Length (ft)</label>
-          <input id="ce_driveLen" class="_input" type="number" min="0" step="10" value="0" disabled />
-        </div>
-      </section>
-
-      <!-- Other Site Factors -->
-      <section class="_section _section--boxed _other-factors" aria-labelledby="s_otherFactors">
-        <h2 id="s_otherFactors" class="_sectionTitle">Other Site Factors</h2>
-        <div class="_grid">
-          <div class="_field">
-            <label class="_label" for="ce_remote">Remote Access</label>
-            <select id="ce_remote" class="_input">
-              <option value="easy" selected>Easy</option>
-              <option value="moderate">Moderate</option>
-              <option value="remote">Remote</option>
-            </select>
+          <label class="_label" for="ce_regionIdx">Region Cost Index (fine-tune)</label>
+          <div class="_inline">
+            <input id="ce_regionIdx" class="_input" type="range" min="0.80" max="1.40" step="0.01" value="1.00" list="ce_regionTicks" />
+            <span class="_badge" id="ce_regionIdxVal">1.00</span>
           </div>
-
-          <div class="_field">
-            <label class="_label" for="ce_inflationPower">Inflation Power</label>
-            <select id="ce_inflationPower" class="_input">
-              <option value="onsite" selected>On-site Power</option>
-              <option value="generator">Generator Rental</option>
-            </select>
-          </div>
-
-          <div class="_field">
-            <label class="_label" for="ce_lightning">
-              <input type="checkbox" id="ce_lightning" /> Lightning Protection
-            </label>
-          </div>
-        </div>
-      </section>
-
-      <!-- Contingency & Actions -->
-      <section class="_section _section--boxed _soft-cont" aria-labelledby="s_contingency">
-        <h2 id="s_contingency" class="_sectionTitle">Contingency</h2>
-        <div class="_grid">
-          <div class="_field">
-            <label class="_label" for="ce_contPct">Contingency %</label>
-            <input id="ce_contPct" class="_input" type="number" min="0" max="100" step="0.1" value="10" />
-            <div class="_hint">Estimator applies contingency to the subtotal only.</div>
-          </div>
-          <div class="_field _full">
-            <div class="_inline _actions-mobile">
-              <button id="ce_calcBtn" class="_btn" type="button">Calculate</button>
-              <button id="ce_clearBtn" class="_btn _secondary" type="button">Clear</button>
-              <button id="ce_printBtn" class="_btn _good" type="button">Export PDF</button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Results -->
-      <div class="_results-pad">
-        <div class="_cards">
-          <div class="_card" aria-live="polite">
-            <h3>Estimated Range</h3>
-            <div class="_big" id="ce_rangeTotal">$0 – $0</div>
-            <div class="_small" id="ce_rangePerSf">$/SF: $0 – $0</div>
-          </div>
-          <div class="_card" aria-live="polite">
-            <h3>Base Dome Shell</h3>
-            <div class="_big" id="ce_baseTotal">$0</div>
-            <div class="_small" id="ce_basePsf">$/SF: $0</div>
-          </div>
-          <div class="_card" aria-live="polite">
-            <h3>Sitework &amp; Rough Grading</h3>
-            <div class="_big" id="ce_siteworkTotal">$0 – $0</div>
-            <div class="_small" id="ce_siteworkNote">Included</div>
-          </div>
-          <div class="_card" style="grid-column:1 / -1;" aria-live="polite">
-            <h3>Assumptions</h3>
-            <div class="_small" id="ce_assumptions">Region 1.00 • Standard finish • Typical glazing • Single dome</div>
+          <datalist id="ce_regionTicks">
+            <option value="0.80"></option><option value="0.90"></option><option value="1.00"></option>
+            <option value="1.10"></option><option value="1.20"></option><option value="1.30"></option><option value="1.40"></option>
+          </datalist>
+          <div class="_ticks"><span>0.80</span><span>0.90</span><span>1.00</span><span>1.10</span><span>1.20</span><span>1.30</span><span>1.40</span></div>
+          <div class="_hint">
+            <strong>For homeowners:</strong> Prices vary by location. If your area tends to run higher or lower than average,
+            slide this left (cheaper) or right (costlier). Not sure? Leave at <strong>1.00</strong> and adjust after you calculate.
           </div>
         </div>
 
-        <h3 class="_results-title">Line-Item Breakdown</h3>
-        <div class="_panel _breakdown" role="region" aria-label="Line-item breakdown table">
-          <table>
-            <thead>
-              <tr>
-                <th>Category</th>
-                <th>Description</th>
-                <th class="_right">Low</th>
-                <th class="_right">High</th>
-              </tr>
-            </thead>
-            <tbody id="ce_breakdown">
-              <tr>
-                <td colspan="4" class="_muted" style="text-align:center;padding:18px">
-                  Run a calculation to see details.
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="_field">
+          <label class="_label" for="ce_diameter">Dome Diameter (ft)</label>
+          <input id="ce_diameter" class="_input" type="number" min="20" step="1" placeholder="e.g., 50" />
+          <div class="_hint">Diameter = width of the dome at the base, in feet. Helpful for sanity checks and planning.</div>
         </div>
-        <p class="_disclaimer">
-          <strong>Important:</strong> Planning-level estimate only (not a bid). Final costs depend on site, engineering, and trade bids.
-        </p>
       </div>
-    </div>
-  </div>
-</div>
+    </section>
+
+    <!-- ===== DESIGN & ENVELOPE (CARD) ===== -->
+    <section class="_panel _sectionCard" role="region" aria-label="Design and Envelope">
+      <h2 class="_sectionTitle">Design &amp; Envelope</h2>
+      <div class="_grid">
+        <div class="_field">
+          <label class="_label" for="ce_finish">Finish Level</label>
+          <select id="ce_finish" class="_input">
+            <option value="0.95">Economy</option>
+            <option value="1.00" selected>Standard</option>
+            <option value="1.20">Premium</option>
+            <option value="1.35">Luxury</option>
+          </select>
+          <div class="_hint">Overall interior finish quality. Higher levels include upgraded materials and detailing.</div>
+        </div>
+
+        <div class="_field">
+          <label class="_label" for="ce_domes">Number of Domes</label>
+          <select id="ce_domes" class="_input">
+            <option value="1" selected>1</option>
+            <option value="2">2</option>
+            <option value="3">3+</option>
+          </select>
+          <div class="_hint">More domes add complexity and connectors, which increases cost.</div>
+        </div>
+
+        <div class="_field">
+          <label class="_label" for="ce_height">Shell Height</label>
+          <select id="ce_height" class="_input">
+            <option value="std" selected>Standard</option>
+            <option value="tall">Tall</option>
+          </select>
+          <div class="_hint">Taller shells add area and materials — good for lofts; expect a modest cost increase.</div>
+        </div>
+
+        <div class="_field">
+          <label class="_label" for="ce_glazing">Glazing %</label>
+          <select id="ce_glazing" class="_input">
+            <option value="0.10">10%</option>
+            <option value="0.20" selected>20%</option>
+            <option value="0.30">30%</option>
+            <option value="0.40">40%</option>
+          </select>
+          <div class="_hint">How much of the shell surface is windows/doors. More glazing = more cost.</div>
+        </div>
+
+        <div class="_field">
+          <label class="_label" for="ce_basement">Basement</label>
+          <select id="ce_basement" class="_input">
+            <option value="none" selected>None</option>
+            <option value="partial">Partial (~50%)</option>
+            <option value="full">Full (~100%)</option>
+          </select>
+          <div class="_hint">Choose a partial or full basement to add livable/storage space under the dome.</div>
+        </div>
+
+        <div class="_field">
+          <label class="_label" for="ce_shellThk">Shell Thickness (in)</label>
+          <select id="ce_shellThk" class="_input">
+            <option value="4" selected>4″</option>
+            <option value="5">5″</option>
+            <option value="6">6″</option>
+          </select>
+          <div class="_hint">Thicker shotcrete/rebar increases strength and cost. Use for larger spans or engineering needs.</div>
+        </div>
+
+        <div class="_field">
+          <label class="_label" for="ce_mixType">Mix Type</label>
+          <select id="ce_mixType" class="_input">
+            <option value="std" selected>Standard</option>
+            <option value="pozz">Pozzolan</option>
+            <option value="hemp">Hempcrete</option>
+          </select>
+          <div class="_hint">Alternate mixes can improve performance or sustainability; they’re typically pricier.</div>
+        </div>
+
+        <div class="_field">
+          <label class="_label" for="ce_oculusCount">Oculus / Skylights</label>
+          <input id="ce_oculusCount" class="_input" type="number" min="0" step="1" value="0" />
+          <div class="_hint">How many skylight/oculus openings you want at the shell.</div>
+        </div>
+
+        <div class="_field">
+          <label class="_label" for="ce_connector">Connector / Tunnel</label>
+          <select id="ce_connector" class="_input">
+            <option value="none" selected>None</option>
+            <option value="short">Short</option>
+            <option value="med">Medium</option>
+            <option value="long">Long</option>
+          </select>
+          <div class="_hint">Links domes or adds entry tunnels. Longer connectors add more shell work.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SITE & SYSTEMS (CARD) ===== -->
+    <section class="_panel _sectionCard" role="region" aria-label="Site and Systems">
+      <h2 class="_sectionTitle">Site &amp; Systems</h2>
+      <div class="_grid">
+        <div class="_field">
+          <label class="_label" for="ce_site">Site Conditions</label>
+          <select id="ce_site" class="_input">
+            <option value="flat" selected>Flat / Easy</option>
+            <option value="moderate">Moderate</option>
+            <option value="complex">Complex / Remote</option>
+          </select>
+          <div class="_hint">Steeper grades, rock, or tricky access increase costs.</div>
+        </div>
+
+        <div class="_field">
+          <label class="_label" for="ce_mep">MEP Complexity</label>
+          <select id="ce_mep" class="_input">
+            <option value="simple">Simple</option>
+            <option value="standard" selected>Standard</option>
+            <option value="advanced">Advanced</option>
+          </select>
+          <div class="_hint">More zones, smart systems, or specialty equipment increase mechanical/electrical/plumbing costs.</div>
+        </div>
+
+        <div class="_field">
+          <label class="_label" for="ce_baths">Bathrooms</label>
+          <input id="ce_baths" class="_input" type="number" min="1" step="1" value="2" />
+          <div class="_hint">Total count of full/half baths. Plumbing scales with bathroom count.</div>
+        </div>
+
+        <div class="_field">
+          <label class="_label" for="ce_incSitework">
+            <input type="checkbox" id="ce_incSitework" checked /> Include Sitework
+          </label>
+          <div class="_hint">If unchecked, sitework/rough grading is assumed by owner/others.</div>
+        </div>
+      </div>
+
+      <h3 class="_sectionSubtitle">Optional Systems</h3>
+      <div class="_inline-stack">
+        <label><input type="checkbox" id="ce_optSolar" /> Solar PV</label>
+        <label><input type="checkbox" id="ce_optStorage" /> Battery Storage</label>
+        <label><input type="checkbox" id="ce_optGeo" /> Geothermal</label>
+        <label><input type="checkbox" id="ce_optRain" /> Rainwater / Cistern</label>
+        <label><input type="checkbox" id="ce_optSeptic" /> Septic</label>
+        <label><input type="checkbox" id="ce_optHydronic" /> Hydronic Floors</label>
+        <label><input type="checkbox" id="ce_optDriveway" /> Driveway</label>
+      </div>
+      <div class="_field _wide">
+        <label class="_label" for="ce_driveLen">Driveway Length (ft)</label>
+        <input id="ce_driveLen" class="_input" type="number" min="0" step="10" value="0" disabled />
+        <div class="_hint">Only needed if “Driveway” is checked. Typical new rural drives are 50–150 ft.</div>
+      </div>
+    </section>
+
+    <!-- ===== OTHER SITE FACTORS (CARD) ===== -->
+    <section class="_panel _sectionCard" role="region" aria-label="Other Site Factors">
+      <h2 class="_sectionTitle">Other Site Factors</h2>
+      <div class="_grid">
+        <div class="_field">
+          <label class="_label" for="ce_remote">Remote Access</label>
+          <select id="ce_remote" class="_input">
+            <option value="easy" selected>Easy</option>
+            <option value="moderate">Moderate</option>
+            <option value="remote">Remote</option>
+          </select>
+          <div class="_hint">Remote sites add logistics for crews, materials, and equipment.</div>
+        </div>
+
+        <div class="_field">
+          <label class="_label" for="ce_inflationPower">Inflation Power</label>
+          <select id="ce_inflationPower" class="_input">
+            <option value="onsite" selected>On-site Power</option>
+            <option value="generator">Generator Rental</option>
+          </select>
+          <div class="_hint">If reliable power isn’t available for airform inflation, choose generator rental.</div>
+        </div>
+
+        <div class="_field">
+          <label><input type="checkbox" id="ce_lightning" /> Lightning Protection</label>
+          <div class="_hint">Adds grounding/lightning protection as a safety provision.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== CONTINGENCY + ACTIONS (CARD) ===== -->
+    <section class="_panel _sectionCard" role="region" aria-label="Contingency">
+      <h2 class="_sectionTitle">Contingency</h2>
+      <div class="_grid">
+        <div class="_field">
+          <label class="_label" for="ce_contPct">Contingency %</label>
+          <input id="ce_contPct" class="_input" type="number" min="0" max="100" step="0.1" value="10" />
+          <div class="_hint">A planning cushion for the unknowns (design decisions, site surprises, market swings).</div>
+        </div>
+        <div class="_field _full">
+          <div class="_inline _actions-mobile">
+            <button id="ce_calcBtn" class="_btn _primary" type="button">Calculate</button>
+            <button id="ce_clearBtn" class="_btn _danger" type="button">Clear</button>
+            <button id="ce_printBtn" class="_btn _good" type="button">Export PDF</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== RESULTS: SUMMARY CARDS ===== -->
+    <section class="_results-pad">
+      <div class="_cards">
+        <div class="_card">
+          <h3>Estimated Range</h3>
+          <div class="_big" id="ce_rangeTotal">$0 – $0</div>
+          <div class="_small" id="ce_rangePerSf">$/SF: $0 – $0</div>
+        </div>
+        <div class="_card">
+          <h3>Base Dome Shell</h3>
+          <div class="_big" id="ce_baseTotal">$0</div>
+          <div class="_small" id="ce_basePsf">$/SF: $0</div>
+        </div>
+        <div class="_card">
+          <h3>Sitework &amp; Rough Grading</h3>
+          <div class="_big" id="ce_siteworkTotal">$0 – $0</div>
+          <div class="_small" id="ce_siteworkNote">Included</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== ASSUMPTIONS (CARD) ===== -->
+    <section class="_panel _sectionCard" role="region" aria-label="Assumptions">
+      <h2 class="_sectionTitle">Assumptions</h2>
+
+      <!-- Hidden raw text that your existing JS writes to -->
+      <div id="ce_assumptions" class="_muted" style="display:none;"></div>
+
+      <!-- Pretty, structured assumptions (auto-built from raw above) -->
+      <div id="ce_assumptions_grid">
+        <!-- Filled dynamically from ce_assumptions text; kept empty at load -->
+      </div>
+
+      <div class="_disclaimer" style="margin-top:12px;">
+        <strong>Important:</strong> Planning-level estimate only (not a bid). Final costs depend on site, engineering, and trade bids.
+      </div>
+    </section>
+
+    <!-- ===== LINE-ITEM BREAKDOWN (CARD) ===== -->
+    <section class="_panel _breakdown" role="region" aria-label="Line-item Breakdown">
+      <h2 class="_sectionTitle">Line-Item Breakdown</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Description</th>
+            <th class="_right">Low</th>
+            <th class="_right">High</th>
+          </tr>
+        </thead>
+        <tbody id="ce_breakdown">
+          <tr>
+            <td colspan="4" class="_muted" style="text-align:center;padding:18px">
+              Run a calculation to see details.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+  </div> <!-- /_wrap -->
+</div> <!-- /#icdce -->
 
 <!-- Sticky action bar -->
 <div class="_stickybar" id="icdce_sticky" role="region" aria-label="Quick actions">
-  <button class="_btn" type="button" onclick="document.getElementById('ce_calcBtn')?.click()">Calculate</button>
-  <button class="_btn _secondary" type="button" onclick="document.getElementById('ce_clearBtn')?.click()">Clear</button>
+  <button class="_btn _primary" type="button" onclick="document.getElementById('ce_calcBtn')?.click()">Calculate</button>
+  <button class="_btn _danger" type="button" onclick="document.getElementById('ce_clearBtn')?.click()">Clear</button>
   <button class="_btn _good" type="button" onclick="document.getElementById('ce_printBtn')?.click()">Export PDF</button>
 </div>
 
@@ -325,10 +353,8 @@
 <div id="icdce_paywall" class="_modalBackdrop" aria-hidden="true">
   <div class="_modal" role="dialog" aria-modal="true" aria-labelledby="pw_title">
     <h3 id="pw_title">Export PDF</h3>
-    <p>
-      Exporting a formatted, two-page PDF is a paid feature. Complete checkout and you’ll be returned here automatically.
-    </p>
-    <div class="_row _actions-mobile" style="margin-top:8px;">
+    <p>Exporting a formatted, two-page PDF is a paid feature. Complete checkout and you’ll be returned here automatically.</p>
+    <div class="_row _actions-mobile" style="display:flex; gap:12px;">
       <button id="pw_payBtn" class="_btn _good" type="button">Go to Checkout</button>
       <button id="pw_closeBtn" class="_btn _secondary" type="button">Close</button>
     </div>
@@ -338,13 +364,126 @@
     <p class="_hint">Already paid? Enter your access code or use a paid return link:</p>
     <div class="_codeRow _inline">
       <input id="pw_code" class="_input" type="text" placeholder="Access code (optional)" />
-      <button id="pw_apply" class="_btn" type="button">Apply Code</button>
+      <button id="pw_apply" class="_btn _primary" type="button">Apply Code</button>
     </div>
     <div id="pw_msg" class="_hint" style="margin-top:8px;"></div>
   </div>
 </div>
 
 <noscript>Please enable JavaScript to use the ICD Cost Estimator.</noscript>
+
+<!-- Main JS -->
 <script src="./icdce.js"></script>
+
+<!-- Tiny helper to transform the assumptions text into a neat grid (no changes to your main JS needed) -->
+<script>
+(function () {
+  const raw = document.getElementById('ce_assumptions');
+  const grid = document.getElementById('ce_assumptions_grid');
+
+  function titleCase(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
+
+  function parse(rawText) {
+    if (!rawText) return {};
+    const tokens = rawText.split('•').map(t => t.trim()).filter(Boolean);
+    const data = {};
+
+    tokens.forEach(t => {
+      // Region 1.05
+      let m;
+      if ((m = t.match(/^Region\s+([0-9.]+)/i))) data.region = m[1];
+      else if ((m = t.match(/^Finish\s+([0-9.]+)/i))) data.finish = m[1];
+      else if ((m = t.match(/^(\d+)%\s*glazing/i))) data.glazing = m[1] + '%';
+      else if ((m = t.match(/^(\d+)\s+dome/i))) data.domes = m[1];
+      else if (/tall shell/i.test(t)) data.shellHeight = 'Tall';
+      else if (/std shell/i.test(t)) data.shellHeight = 'Standard';
+      else if (/No basement/i.test(t)) data.basement = 'None';
+      else if (/Partial basement/i.test(t)) data.basement = 'Partial (~50%)';
+      else if (/Full basement/i.test(t)) data.basement = 'Full (~100%)';
+      else if ((m = t.match(/(\bflat|\bmoderate|\bcomplex)\s+site/i))) data.site = titleCase(m[1]);
+      else if (/Sitework included/i.test(t)) data.sitework = 'Included';
+      else if (/Sitework excluded/i.test(t)) data.sitework = 'Excluded';
+      else if ((m = t.match(/\b(simple|standard|advanced)\s+MEP/i))) data.mep = titleCase(m[1]);
+      else if ((m = t.match(/(\d+)\s+baths?/i))) data.baths = m[1];
+      else if ((m = t.match(/^Options:\s*(.+)$/i))) data.options = m[1];
+      else if ((m = t.match(/^Shell\s+(\d+)″/i))) data.shellThk = m[1] + '″';
+      else if ((m = t.match(/^Mix:\s*(.+)$/i))) data.mix = m[1];
+      else if ((m = t.match(/^Connector:\s*(.+)$/i))) data.connector = titleCase(m[1]);
+      else if ((m = t.match(/^Oculus:\s*(\d+)/i))) data.oculus = m[1];
+      else if ((m = t.match(/^Access:\s*(.+)$/i))) data.access = titleCase(m[1]);
+      else if ((m = t.match(/^Contingency:\s*([0-9.]+)%/i))) data.contingency = m[1] + '%';
+      else if ((m = t.match(/^Inflation power:\s*(.+)$/i))) {
+        const v = /generator/i.test(m[1]) ? 'Generator' : 'On-site';
+        data.inflation = v;
+      }
+    });
+    return data;
+  }
+
+  function pill(label, value){
+    return (
+      '<div class="_field">' +
+        '<div class="_label" style="margin-bottom:6px;">' + label + '</div>' +
+        '<div><span class="_badge">' + (value || '—') + '</span></div>' +
+      '</div>'
+    );
+  }
+
+  function section(title, innerHTML){
+    return (
+      '<div class="_section" style="margin-bottom:12px;">' +
+        '<div class="_sectionSubtitle" style="margin-bottom:8px;">' + title + '</div>' +
+        '<div class="_grid">' + innerHTML + '</div>' +
+      '</div>'
+    );
+  }
+
+  function renderGrid() {
+    const txt = raw ? raw.textContent.trim() : '';
+    const d = parse(txt);
+
+    const basics = [
+      pill('Region', d.region),
+      pill('Finish index', d.finish),
+      pill('Glazing', d.glazing),
+      pill('Domes', d.domes),
+      pill('Shell height', d.shellHeight),
+      pill('Basement', d.basement),
+      pill('Shell thickness', d.shellThk),
+      pill('Mix', d.mix)
+    ].join('');
+
+    const site = [
+      pill('Site', d.site),
+      pill('Sitework', d.sitework),
+      pill('Bathrooms', d.baths),
+      pill('Connector', d.connector),
+      pill('Oculus / skylights', d.oculus),
+      pill('Access', d.access),
+      pill('Inflation power', d.inflation)
+    ].join('');
+
+    const cost = [
+      pill('MEP', d.mep),
+      pill('Options', d.options),
+      pill('Contingency', d.contingency)
+    ].join('');
+
+    grid.innerHTML =
+      section('Project & Envelope', basics) +
+      section('Site & Logistics', site) +
+      section('Systems & Allowances', cost);
+  }
+
+  // Build once at load (in case there was a restore)
+  renderGrid();
+
+  // Watch for your main JS updating the raw text, then rebuild grid
+  if (raw) {
+    const mo = new MutationObserver(renderGrid);
+    mo.observe(raw, { childList: true, characterData: true, subtree: true });
+  }
+})();
+</script>
 </body>
 </html>
