@@ -405,3 +405,38 @@ label > input[type="checkbox"]{
   ._brandbar{ flex-direction: column; align-items:flex-start; gap: 8px; }
 }
 
+/* ======== Additions for new fields / flows (NON-BREAKING) ======== */
+
+/* Show modal when aria-hidden="false" is toggled by JS */
+._modalBackdrop[aria-hidden="false"]{
+  display:flex;
+}
+
+/* Disabled inputs: soft dim for clarity */
+._input:disabled{
+  background:#f1f5fb;
+  color:#6b7a94;
+  opacity:0.75;
+  cursor:not-allowed;
+}
+
+/* Compact widths for small numeric inputs */
+#ce_driveLen{ max-width:160px; }
+#ce_ncDomes, #ce_ncSf{ max-width:180px; }
+
+/* Badge for region index value (keeps your badge style but ensures good spacing) */
+#ce_regionIdxVal._badge{ margin-left:4px; }
+
+/* Ensure datalist tick row wraps nicely on narrow screens */
+._ticks span{ min-width: 34px; text-align:center; }
+
+/* Make assumption pills look good even if JS injects longer values */
+#ce_assumptions_grid ._badge{
+  display:inline-block;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+
