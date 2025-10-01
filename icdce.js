@@ -536,325 +536,465 @@ document.addEventListener('DOMContentLoaded', function () {
     toggleDrivewayInputs();
   }
   
-  /* -------------------------------------------------------
+ /* -------------------------------------------------------
     3) PDF Export (jsPDF loader + generator)
-  --------------------------------------------------------*/
-  function ensureJsPDF() {
-    return new Promise(function (resolve, reject) {
-      var hasCore = !!(window.jspdf && window.jspdf.jsPDF);
-      var hasAT   = !!(window.jspdf && window.jspdf.autoTable);
-      if (hasCore && hasAT) return resolve();
-      function load(src) {
-        return new Promise(function (res, rej) {
-          var s = document.createElement('script');
-          s.src = src; s.async = true;
-          s.onload = res; s.onerror = function () { rej(new Error('Failed to load ' + src)); };
-          document.head.appendChild(s);
-        });
-      }
-      (hasCore ? Promise.resolve()
-               : load('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'))
-      .then(function () { return hasAT ? Promise.resolve()
-               : load('https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js'); })
-      .then(resolve).catch(reject);
-    });
-  }
-  
-  function drawFooter(doc) {
-    var pageW = doc.internal.pageSize.getWidth();
-    var pageH = doc.internal.pageSize.getHeight();
-    var margin = 44;
-    var y = pageH - 40;
-    doc.setDrawColor(230, 234, 240);
-    doc.line(margin, y, pageW - margin, y);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(110);
-    var pageNo = doc.getCurrentPageInfo ? doc.getCurrentPageInfo().pageNumber : doc.internal.getNumberOfPages();
-    doc.text('Planning-level estimate only. Not a bid. Final costs depend on site, engineering, and trade bids.', margin, y + 14);
-    doc.text('Page ' + pageNo, pageW - margin, y + 14, { align: 'right' });
-    doc.setTextColor(0);
-  }
-  
-  function saveOrOpenPDF(doc, filename) {
-    try {
-      var fe = window.frameElement;
-      var sandboxed = !!(fe && fe.hasAttribute('sandbox'));
-      if (!sandboxed && ('download' in HTMLAnchorElement.prototype)) { doc.save(filename); return; }
-    } catch (_) {}
-    var blob = doc.output('blob');
-    var url = URL.createObjectURL(blob);
-    var w = window.open(url, '_blank', 'noopener');
-    if (!w) alert('Popup blocked. Please allow pop-ups to download the PDF.');
-    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
-  }
-  
-  async function exportPDF(inp, est) {
-    await ensureJsPDF();
-    var jsPDF = window.jspdf.jsPDF;
-    var doc = new jsPDF({ unit: 'pt', format: 'letter' });
-    var margin = 44;
-    var pageW = doc.internal.pageSize.getWidth();
-    var maxW = pageW - margin * 2;
-    var y = 64;
-  
-    // Cover summary
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(20);
-    doc.text('ICD Cost Estimator™ — Planning Estimate', margin, y); y += 22;
-  
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(100);
-    doc.text('Generated ' + new Date().toLocaleString(), margin, y); doc.setTextColor(0); y += 24;
-  
-    doc.setDrawColor(230, 234, 240); doc.setFillColor(248, 250, 252);
-    doc.roundedRect(margin - 10, y - 10, maxW + 20, 120, 8, 8, 'F');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
-    doc.text('Summary', margin, y + 12);
-  
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(24);
-    doc.text('Estimated Range: ' + money0(est.totals.low) + ' – ' + money0(est.totals.high), margin, y + 46);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(12);
-    doc.text('$/SF: ' + money0(est.totals.lowPSF) + ' – ' + money0(est.totals.highPSF), margin, y + 70);
-    doc.text('Base Dome Shell: ' + money0(est.base.structureCost) + '  •  Base $/SF: ' + money0(est.totals.structurePSFout), margin, y + 92);
-    y += 140;
-  
-    // Assumptions
-    var sw = est.parts.sitework;
-    var swVal = sw.included ? (money0(sw.low) + ' – ' + money0(sw.high)) : 'Excluded';
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(12);
-    doc.text('Assumptions', margin, y);
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(90);
-    var assumptions =
-      'Region ' + est.parts.regionFactor.toFixed(2) +
-      ' • Finish ' + est.inp.finish.toFixed(2) +
-      ' • ' + (est.inp.glazing * 100).toFixed(0) + '% glazing' +
-      ' • ' + est.inp.domes + ' dome' + (est.inp.domes === '1' ? '' : 's') +
-      ' • ' + (est.inp.height === 'tall' ? 'tall shell' : 'std shell') +
-      ' • ' + (est.inp.basement === 'none' ? 'No basement (slab)' : (est.inp.basement === 'partial' ? 'Partial basement (~50%)' : 'Full basement (~100%)')) +
-      ' • ' + est.inp.site + ' site' +
-      ' • Sitework: ' + swVal +
-      ' • ' + est.inp.mep + ' MEP' +
-      ' • ' + est.inp.baths + ' bath' + (est.inp.baths > 1 ? 's' : '') +
-      " • Shell " + est.inp.shellThk + "″" +
-      " • Mix: " + (est.inp.mixType === 'pozz' ? 'Pozzolan' : (est.inp.mixType === 'hemp' ? 'Hempcrete' : 'Standard')) +
-      (est.inp.connector !== "none" ? " • Connector: " + est.inp.connector : "") +
-      (est.inp.oculusCount > 0 ? " • Oculus: " + est.inp.oculusCount : "") +
-      " • Access: " + est.inp.remote +
-      " • Contingency: " + (est.inp.contPct * 100).toFixed(1) + "%" +
-      " • Inflation power: " + (est.inp.inflationPower === 'generator' ? 'Generator' : 'On-site');
-    var asumLines = doc.splitTextToSize(assumptions, maxW);
-    doc.text(asumLines, margin, y + 16);
-    doc.setTextColor(0);
-  
-    drawFooter(doc);
-  
-    // Line-Item page
-    doc.addPage();
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
-    doc.text('Line-Item Breakdown', margin, 64);
-  
-    var body = [], currentCat = null;
-    est.items.forEach(function (it) {
-      if (it.cat !== currentCat) {
-        currentCat = it.cat;
-        body.push([{ content: '— ' + currentCat + ' —', colSpan: 4, styles: { halign: 'left', fillColor: [241,245,249], textColor: 20, fontStyle: 'bold' } }]);
-      }
-      body.push([it.name, it.desc, money0(it.low), money0(it.high)]);
-    });
-  
-    body.push(['Subtotal (pre contingency)', 'All line items above', money0(est.totals.preLow), money0(est.totals.preHigh)]);
-    body.push(['Contingency', (est.inp.contPct * 100).toFixed(1) + '%', money0(est.totals.contLow), money0(est.totals.contHigh)]);
-    if (est.parts.optsSum) body.push(['Optional systems', (est.parts.optLabels || []).join(' + '), money0(est.parts.optsSum), money0(est.parts.optsSum)]);
-  
-    var withContLow  = est.totals.preLow + est.totals.contLow + (est.parts.optsSum || 0);
-    var withContHigh = est.totals.preHigh + est.totals.contHigh + (est.parts.optsSum || 0);
-    var spreadLow  = withContLow  * (-0.05);
-    var spreadHigh = withContHigh * (0.07);
-    body.push(['Range spread', '-5% / +7%', money0(spreadLow), money0(spreadHigh)]);
-    body.push(['Total (rounded)', 'Low / High', money0(est.totals.low), money0(est.totals.high)]);
-  
-    doc.autoTable({
-      startY: 78,
-      head: [['Category', 'Description', 'Low', 'High']],
-      body,
-      theme: 'grid',
-      styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, overflow: 'linebreak', lineColor: [230,234,240], lineWidth: .5 },
-      headStyles: { fillColor: [248,250,252], textColor: 33, fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [252,253,255] },
-      columnStyles: { 0: { cellWidth: 180 }, 1: { cellWidth: 'auto' }, 2: { halign: 'right', cellWidth: 90 }, 3: { halign: 'right', cellWidth: 90 } },
-      margin: { left: 44, right: 44 },
-      didDrawPage: function () { drawFooter(doc); }
-    });
-  
-    saveOrOpenPDF(doc, 'ICD-Estimate.pdf');
-  }
-  
-  /* -------------------------------------------------------
-    4) UI Wiring, Sliders, Init, Stripe Return Handling
-  --------------------------------------------------------*/
-  /* Slider helpers */
-  function updateRangeFill(el) {
-    if (!el) return;
-    var min = parseFloat(el.min || 0), max = parseFloat(el.max || 100), val = parseFloat(el.value || 0);
-    var pct = ((val - min) / (max - min)) * 100;
-    el.style.setProperty('--fill', pct + '%');
-  }
-  function applyRegionPreset() {
-    var sel = $('ce_region'); var slider = $('ce_regionIdx');
-    if (sel && slider) { slider.value = sel.value; updateRegionIdxBadge(); updateRangeFill(slider); }
-  }
-  function updateRegionIdxBadge() {
-    var slider = $('ce_regionIdx'); var badge = $('ce_regionIdxVal');
-    if (slider && badge) badge.textContent = (+slider.value || 1).toFixed(2);
-  }
-  function toggleDrivewayInputs() {
-    var cb = $('ce_optDriveway'); var len = $('ce_driveLen');
-    if (!len) return;
-    var checked = !!(cb && cb.checked);
-    len.disabled = !checked;
-    len.style.opacity = checked ? '1' : '0.6';
-  }
-  
-  /* Wiring */
-  whenReady(['ce_region'], function () { $('ce_region').addEventListener('change', applyRegionPreset); });
-  whenReady(['ce_regionIdx','ce_regionIdxVal'], function () {
-    $('ce_regionIdx').addEventListener('input', function (e) { updateRegionIdxBadge(); updateRangeFill(e.target); });
-    updateRegionIdxBadge(); updateRangeFill($('ce_regionIdx'));
-  });
-  whenReady(['ce_optDriveway','ce_driveLen'], function () { $('ce_optDriveway').addEventListener('change', toggleDrivewayInputs); });
-  
-  whenReady(['ce_calcBtn'], function () {
-    $('ce_calcBtn').addEventListener('click', function () {
-      var inp = getInputs();
-      var est = compute(inp);
-      lastInputs = inp; lastEstimate = est;
-      render(est);
-      if (inp && inp.sf > 0) persistInputs(inp);
-    });
-  });
-  whenReady(['ce_clearBtn'], function () {
-    $('ce_clearBtn').addEventListener('click', function () {
-      ['ce_sf','ce_driveLen'].forEach(function (id) { var el = $(id); if (el) el.value = ""; });
-      if ($('ce_region')) { $('ce_region').value = "1.00"; applyRegionPreset(); }
-      if ($('ce_finish')) $('ce_finish').value = "1.00";
-      if ($('ce_domes')) $('ce_domes').value = "1";
-      if ($('ce_height')) $('ce_height').value = "std";
-      if ($('ce_glazing')) $('ce_glazing').value = "0.20";
-      if ($('ce_basement')) $('ce_basement').value = "none";
-      if ($('ce_site')) $('ce_site').value = "flat";
-      if ($('ce_mep')) $('ce_mep').value = "standard";
-      if ($('ce_baths')) $('ce_baths').value = "2";
-      if ($('ce_incSitework')) $('ce_incSitework').checked = true;
-      ['ce_optSolar','ce_optStorage','ce_optGeo','ce_optRain','ce_optSeptic','ce_optHydronic','ce_optDriveway'].forEach(function (id) { var el = $(id); if (el) el.checked = false; });
-      if ($('ce_diameter')) $('ce_diameter').value = "";
-      if ($('ce_shellThk')) $('ce_shellThk').value = "4";
-      if ($('ce_mixType')) $('ce_mixType').value = "std";
-      if ($('ce_oculusCount')) $('ce_oculusCount').value = "0";
-      if ($('ce_connector')) $('ce_connector').value = "none";
-      if ($('ce_remote')) $('ce_remote').value = "easy";
-      if ($('ce_inflationPower')) $('ce_inflationPower').value = "onsite";
-      if ($('ce_lightning')) $('ce_lightning').checked = false;
-      if ($('ce_contPct')) $('ce_contPct').value = "10";
-  
-      clearInputsStore();
-  
-      var zero = {
-        totals: { low: 0, high: 0, lowPSF: 0, highPSF: 0, structurePSFout: 0, preLow: 0, preHigh: 0, contLow: 0, contHigh: 0 },
-        base: { structureCost: 0, glazingCost: 0, basementLow: 0, basementHigh: 0 },
-        parts: { regionFactor: 1, optsSum: 0, optLabels: [], shell: null, sitework: { low: 0, high: 0, included: true } },
-        items: [],
-        inp: { finish: 1, glazing: .2, domes: '1', height: 'std', site: 'flat', mep: 'standard', sf: 0, contPct: 0.10, opts: {}, baths: 2, expectedBaths: 1, drivewayLen: 0, includeSitework: true, basement: 'none', shellThk: 4, mixType: "std", oculusCount: 0, connector: "none", remote: "easy", inflationPower: "onsite", lightning: false }
-      };
-      lastEstimate = zero; lastInputs = zero.inp;
-      render(zero);
-      toggleDrivewayInputs();
-      updateRegionIdxBadge();
-      updateRangeFill($('ce_regionIdx'));
-    });
-  });
-  whenReady(['ce_printBtn'], function () {
-    $('ce_printBtn').addEventListener('click', async function () {
-      var inp = lastInputs || getInputs();
-      if (!inp || !inp.sf) { alert("Enter square footage and click Calculate first."); return; }
-      persistInputs(inp);
-      if (!isPaid()) { openPaywall(); return; }
-      var est = lastEstimate || compute(inp);
-      if (!lastEstimate) { render(est); lastEstimate = est; lastInputs = inp; }
-      try { await exportPDF(inp, est); hideUnlockToast(); } 
-      catch (err) { console.error(err); alert('Could not create the PDF.'); }
-    });
-  });
-  
-  /* Paywall modal wiring */
-  whenReady(['pw_payBtn','pw_closeBtn','pw_apply','pw_code','pw_msg'], function (payBtn, closeBtn, applyBtn, codeInput, msg) {
-    payBtn.addEventListener('click', gotoCheckout);
-    closeBtn.addEventListener('click', closePaywall);
-    applyBtn.addEventListener('click', function () {
-      var code = (codeInput.value || '').trim();
-      if (!ACCESS_CODE) { msg.textContent = "Access code is not enabled. Use the checkout button above."; return; }
-      if (code && code.toLowerCase() === ACCESS_CODE.toLowerCase()) {
-        setPaid();
-        msg.textContent = "Access granted. You can now export the PDF.";
-        setTimeout(closePaywall, 600);
-        unhideActions();
-        ensureJsPDF().catch(() => {});
-        showUnlockToast();
-      } else {
-        msg.textContent = "That code didn’t match. Please try again or use checkout.";
-      }
-    });
-  });
-  
-  /* Init: restore saved state, render zero or saved, show actions if already paid */
-  (function tryRestoreOnLoad() {
-    const saved = readInputsFromStore();
-    if (saved) {
-      fillFormFromInputs(saved);
-      const est = compute(saved);
-      lastInputs = saved; lastEstimate = est;
-      render(est);
-    } else {
-      render({
-        totals: { low: 0, high: 0, lowPSF: 0, highPSF: 0, structurePSFout: 0, preLow: 0, preHigh: 0, contLow: 0, contHigh: 0 },
-        base: { structureCost: 0, glazingCost: 0, basementLow: 0, basementHigh: 0 },
-        parts: { regionFactor: 1, optsSum: 0, optLabels: [], shell: null, sitework: { low: 0, high: 0, included: true } },
-        items: [],
-        inp: { finish: 1, glazing: .2, domes: '1', height: 'std', site: 'flat', mep: 'standard', sf: 0, contPct: 0.10, opts: {}, baths: 2, expectedBaths: 1, drivewayLen: 0, includeSitework: true, basement: 'none', shellThk: 4, mixType: "std", oculusCount: 0, connector: "none", remote: "easy", inflationPower: "onsite", lightning: false }
+--------------------------------------------------------*/
+function ensureJsPDF() {
+  return new Promise(function (resolve, reject) {
+    var hasCore = !!(window.jspdf && window.jspdf.jsPDF);
+    var hasAT   = !!(window.jspdf && window.jspdf.autoTable);
+    if (hasCore && hasAT) return resolve();
+    function load(src) {
+      return new Promise(function (res, rej) {
+        var s = document.createElement('script');
+        s.src = src; s.async = true;
+        s.onload = res; s.onerror = function () { rej(new Error('Failed to load ' + src)); };
+        document.head.appendChild(s);
       });
     }
-    if (isPaid()) unhideActions();
-  })();
-  
-  applyRegionPreset();
-  toggleDrivewayInputs();
-  updateRegionIdxBadge();
-  updateRangeFill($('ce_regionIdx'));
-  
-  /* Stripe return: ?paid=1 or true → mark paid, clean URL, restore inputs, unhide, preload jsPDF, show toast */
-  (function checkPaidReturn() {
-    try {
-      const usp = new URLSearchParams(window.location.search);
-      const val = usp.get(SUCCESS_PARAM);
-      if (val === '1' || val === 'true') {
-        setPaid();
-  
-        // Clean URL to avoid re-trigger on refresh
-        if (history && history.replaceState) {
-          usp.delete(SUCCESS_PARAM);
-          const clean = window.location.pathname + (usp.toString() ? '?' + usp.toString() : '');
-          history.replaceState({}, document.title, clean);
-        }
-  
-        const saved = readInputsFromStore();
-        if (saved) {
-          fillFormFromInputs(saved);
-          lastInputs = saved;
-          lastEstimate = compute(saved);
-          render(lastEstimate);
-        }
-  
-        unhideActions();
-        ensureJsPDF().catch(() => {}); // warm-up for instant click
-        showUnlockToast();
-      }
-    } catch (e) {}
-  })();
+    (hasCore ? Promise.resolve()
+             : load('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'))
+    .then(function () { return hasAT ? Promise.resolve()
+             : load('https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js'); })
+    .then(resolve).catch(reject);
   });
+}
+
+/* ===== PDF helpers (footer, save/open) ===== */
+function drawFooter(doc) {
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 44;
+  const y = pageH - 40;
+
+  doc.setDrawColor(230, 234, 240);
+  doc.line(margin, y, pageW - margin, y);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(110);
+  const pageNo = doc.getCurrentPageInfo
+    ? doc.getCurrentPageInfo().pageNumber
+    : doc.internal.getNumberOfPages();
+  doc.text(
+    'Planning-level estimate only. Not a bid. Final costs depend on site, engineering, and trade bids.',
+    margin,
+    y + 14
+  );
+  doc.text('Page ' + pageNo, pageW - margin, y + 14, { align: 'right' });
+  doc.setTextColor(0);
+}
+
+function saveOrOpenPDF(doc, filename) {
+  try {
+    const fe = window.frameElement;
+    const sandboxed = !!(fe && fe.hasAttribute('sandbox'));
+    if (!sandboxed && ('download' in HTMLAnchorElement.prototype)) { doc.save(filename); return; }
+  } catch (_) {}
+  const blob = doc.output('blob');
+  const url = URL.createObjectURL(blob);
+  const w = window.open(url, '_blank', 'noopener');
+  if (!w) alert('Popup blocked. Please allow pop-ups to download the PDF.');
+  setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+}
+
+/* ===== Cover helpers (navy theme) ===== */
+function drawKPI(doc, x, y, w, h, label, value, colors) {
+  const r = 10;
+  doc.setDrawColor(colors.accent[0], colors.accent[1], colors.accent[2]);
+  doc.setFillColor(colors.kpiBg[0], colors.kpiBg[1], colors.kpiBg[2]);
+  doc.roundedRect(x, y, w, h, r, r, 'F');
+
+  // Label
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(colors.accent[0], colors.accent[1], colors.accent[2]);
+  doc.text(label.toUpperCase(), x + 14, y + 20);
+
+  // Value
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(20);
+  doc.setTextColor(colors.navy[0], colors.navy[1], colors.navy[2]);
+  const lines = doc.splitTextToSize(value, w - 28);
+  doc.text(lines, x + 14, y + 48);
+}
+
+function buildAssumptionsRows(inp, est, money0) {
+  const sw = est.parts.sitework;
+  const swVal = sw.included ? (money0(sw.low) + ' – ' + money0(sw.high)) : 'Excluded';
+  const basement = inp.basement === 'none'
+    ? 'No basement (slab)'
+    : (inp.basement === 'partial' ? 'Partial basement (~50%)' : 'Full basement (~100%)');
+  const mix = inp.mixType === 'pozz' ? 'Pozzolan' : (inp.mixType === 'hemp' ? 'Hempcrete' : 'Standard');
+  const height = (inp.height === 'tall' ? 'tall shell' : 'std shell');
+
+  const items = [
+    ['Region', est.parts.regionFactor.toFixed(2)],
+    ['Finish', (+inp.finish || 1).toFixed(2)],
+    ['Glazing', ((+inp.glazing || 0) * 100).toFixed(0) + '%'],
+    ['Domes', inp.domes],
+    ['Shell Height', height],
+    ['Basement', basement],
+    ['Site', inp.site],
+    ['Sitework', swVal],
+    ['MEP', inp.mep],
+    ['Baths', String(inp.baths)],
+    ['Shell Thickness', inp.shellThk + '"'], // ASCII quote to avoid missing glyphs
+    ['Mix', mix],
+    ...(inp.connector !== 'none' ? [['Connector', inp.connector]] : []),
+    ...(inp.oculusCount > 0 ? [['Oculus', String(inp.oculusCount)]] : []),
+    ['Access', inp.remote],
+    ['Contingency', (inp.contPct * 100).toFixed(1) + '%'],
+    ['Inflation Power', (inp.inflationPower === 'generator' ? 'Generator' : 'On-site')]
+  ];
+  return items;
+}
+
+/* ===== Export (navy cover + existing breakdown) ===== */
+async function exportPDF(inp, est) {
+  // Ensure jsPDF + autoTable are available
+  await ensureJsPDF();
+  const { jsPDF } = window.jspdf || {};
+  if (!jsPDF) throw new Error('jsPDF not available');
+
+  // Colors
+  const colors = {
+    navy: [17, 34, 64],         // #112240
+    accent: [38, 86, 138],      // #26568A
+    headerBg: [17, 34, 64],
+    headerText: [255, 255, 255],
+    kpiBg: [245, 248, 255],     // very light blue
+    muted: [110, 110, 110],
+    line: [230, 234, 240]
+  };
+
+  // Create doc + layout
+  const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 44;
+  const maxW = pageW - margin * 2;
+
+  /* ======= COVER PAGE (Navy) ======= */
+  // Header band
+  const headerH = 92;
+  doc.setFillColor(colors.headerBg[0], colors.headerBg[1], colors.headerBg[2]);
+  doc.rect(0, 0, pageW, headerH, 'F');
+
+  // Title
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(22);
+  doc.setTextColor(colors.headerText[0], colors.headerText[1], colors.headerText[2]);
+  doc.text('ICD Cost Estimator™ — Planning Estimate', margin, 56);
+
+  // Timestamp (right-side)
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(220);
+  const stamp = 'Generated ' + new Date().toLocaleString();
+  doc.text(stamp, pageW - margin, 56, { align: 'right' });
+
+  // KPIs row
+  const kpiY = headerH + 28;
+  const kpiH = 86;
+  const gap = 18;
+  const kpiW = (maxW - gap * 2) / 3;
+
+  const rangeText = money0(est.totals.low) + ' – ' + money0(est.totals.high);
+  const psfText = money0(est.totals.lowPSF) + ' – ' + money0(est.totals.highPSF);
+  const baseText = money0(est.base.structureCost) + ' • Base $/SF: ' + money0(est.totals.structurePSFout);
+
+  drawKPI(doc, margin + 0*(kpiW + gap), kpiY, kpiW, kpiH, 'Estimated Range', rangeText, colors);
+  drawKPI(doc, margin + 1*(kpiW + gap), kpiY, kpiW, kpiH, '$ / SF', psfText, colors);
+  drawKPI(doc, margin + 2*(kpiW + gap), kpiY, kpiW, kpiH, 'Base Dome Shell', baseText, colors);
+
+  // Assumptions card (two-column, clean)
+  let y = kpiY + kpiH + 28;
+  const cardR = 10;
+  const colGap = 28;
+  const colW = (maxW - colGap) / 2;
+  const rowH = 18;
+
+  const rows = buildAssumptionsRows(inp, est, money0);
+  const left  = rows.slice(0, Math.ceil(rows.length / 2));
+  const right = rows.slice(Math.ceil(rows.length / 2));
+
+  // Compute card height to fit content
+  const rowsPerCol = Math.ceil(rows.length / 2);
+  const neededH = 24 /*header*/ + rowsPerCol * rowH + 32 /*bottom pad*/;
+  const cardH = Math.max(neededH, 170);
+
+  doc.setDrawColor(colors.line[0], colors.line[1], colors.line[2]);
+  doc.setFillColor(248, 250, 252);
+  doc.roundedRect(margin - 8, y - 14, maxW + 16, cardH, cardR, cardR, 'F');
+
+  // Card header
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.setTextColor(colors.navy[0], colors.navy[1], colors.navy[2]);
+  doc.text('Assumptions', margin, y);
+
+  // Column painter
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+
+  function drawAssumptionColumn(arr, x, yy) {
+    arr.forEach((pair, i) => {
+      const lineY = yy + i * rowH;
+      const label = pair[0] + ':';
+      const val = pair[1];
+
+      // bullet
+      doc.setFillColor(colors.accent[0], colors.accent[1], colors.accent[2]);
+      doc.circle(x + 3, lineY - 3.5, 2, 'F');
+
+      // label
+      doc.setTextColor(colors.navy[0], colors.navy[1], colors.navy[2]);
+      doc.setFont('helvetica', 'bold');
+      doc.text(label, x + 12, lineY);
+
+      // value
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(60);
+      const lblW = doc.getTextWidth(label + ' ');
+      const wrap = doc.splitTextToSize(String(val), colW - 12 - lblW);
+      doc.text(wrap, x + 12 + lblW, lineY);
+    });
+  }
+
+  const colY = y + 24;
+  drawAssumptionColumn(left,  margin,                 colY);
+  drawAssumptionColumn(right, margin + colW + colGap, colY);
+
+  // fine print at bottom of cover
+  doc.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.text('Planning-level estimate only. Not a bid. Final costs depend on site, engineering, and trade bids.', margin, pageH - 48);
+
+  drawFooter(doc);
+
+  /* ======= BREAKDOWN PAGE (unchanged style) ======= */
+  doc.addPage();
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(16);
+  doc.setTextColor(0);
+  doc.text('Line-Item Breakdown', margin, 64);
+
+  const body = [];
+  let currentCat = null;
+  est.items.forEach((it) => {
+    if (it.cat !== currentCat) {
+      currentCat = it.cat;
+      body.push([{
+        content: '— ' + currentCat + ' —',
+        colSpan: 4,
+        styles: { halign: 'left', fillColor: [241, 245, 249], textColor: 20, fontStyle: 'bold' }
+      }]);
+    }
+    body.push([it.name, it.desc, money0(it.low), money0(it.high)]);
+  });
+
+  body.push(['Subtotal (pre contingency)', 'All line items above', money0(est.totals.preLow), money0(est.totals.preHigh)]);
+  body.push(['Contingency', (est.inp.contPct * 100).toFixed(1) + '%', money0(est.totals.contLow), money0(est.totals.contHigh)]);
+  if (est.parts.optsSum) {
+    body.push(['Optional systems', (est.parts.optLabels || []).join(' + '), money0(est.parts.optsSum), money0(est.parts.optsSum)]);
+  }
+
+  const withContLow  = est.totals.preLow + est.totals.contLow + (est.parts.optsSum || 0);
+  const withContHigh = est.totals.preHigh + est.totals.contHigh + (est.parts.optsSum || 0);
+  const spreadLow  = withContLow  * (-0.05);
+  const spreadHigh = withContHigh * (0.07);
+  body.push(['Range spread', '-5% / +7%', money0(spreadLow), money0(spreadHigh)]);
+  body.push(['Total (rounded)', 'Low / High', money0(est.totals.low), money0(est.totals.high)]);
+
+  doc.autoTable({
+    startY: 78,
+    head: [['Item', 'Description', 'Low', 'High']],
+    body,
+    theme: 'grid',
+    styles: { font: 'helvetica', fontSize: 10, cellPadding: 6, overflow: 'linebreak', lineColor: [230, 234, 240], lineWidth: 0.5 },
+    headStyles: { fillColor: [248, 250, 252], textColor: 33, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [252, 253, 255] },
+    columnStyles: { 0: { cellWidth: 180 }, 1: { cellWidth: 'auto' }, 2: { halign: 'right', cellWidth: 90 }, 3: { halign: 'right', cellWidth: 90 } },
+    margin: { left: 44, right: 44 },
+    didDrawPage: function () { drawFooter(doc); }
+  });
+
+  saveOrOpenPDF(doc, 'ICD-Estimate-NAVY.pdf');
+}
+
+
+/* -------------------------------------------------------
+  4) UI Wiring, Sliders, Init, Stripe Return Handling
+--------------------------------------------------------*/
+/* Slider helpers */
+function updateRangeFill(el) {
+  if (!el) return;
+  var min = parseFloat(el.min || 0), max = parseFloat(el.max || 100), val = parseFloat(el.value || 0);
+  var pct = ((val - min) / (max - min)) * 100;
+  el.style.setProperty('--fill', pct + '%');
+}
+function applyRegionPreset() {
+  var sel = $('ce_region'); var slider = $('ce_regionIdx');
+  if (sel && slider) { slider.value = sel.value; updateRegionIdxBadge(); updateRangeFill(slider); }
+}
+function updateRegionIdxBadge() {
+  var slider = $('ce_regionIdx'); var badge = $('ce_regionIdxVal');
+  if (slider && badge) badge.textContent = (+slider.value || 1).toFixed(2);
+}
+function toggleDrivewayInputs() {
+  var cb = $('ce_optDriveway'); var len = $('ce_driveLen');
+  if (!len) return;
+  var checked = !!(cb && cb.checked);
+  len.disabled = !checked;
+  len.style.opacity = checked ? '1' : '0.6';
+}
+
+/* Wiring */
+whenReady(['ce_region'], function () { $('ce_region').addEventListener('change', applyRegionPreset); });
+whenReady(['ce_regionIdx','ce_regionIdxVal'], function () {
+  $('ce_regionIdx').addEventListener('input', function (e) { updateRegionIdxBadge(); updateRangeFill(e.target); });
+  updateRegionIdxBadge(); updateRangeFill($('ce_regionIdx'));
+});
+whenReady(['ce_optDriveway','ce_driveLen'], function () { $('ce_optDriveway').addEventListener('change', toggleDrivewayInputs); });
+
+whenReady(['ce_calcBtn'], function () {
+  $('ce_calcBtn').addEventListener('click', function () {
+    var inp = getInputs();
+    var est = compute(inp);
+    lastInputs = inp; lastEstimate = est;
+    render(est);
+    if (inp && inp.sf > 0) persistInputs(inp);
+  });
+});
+whenReady(['ce_clearBtn'], function () {
+  $('ce_clearBtn').addEventListener('click', function () {
+    ['ce_sf','ce_driveLen'].forEach(function (id) { var el = $(id); if (el) el.value = ""; });
+    if ($('ce_region')) { $('ce_region').value = "1.00"; applyRegionPreset(); }
+    if ($('ce_finish')) $('ce_finish').value = "1.00";
+    if ($('ce_domes')) $('ce_domes').value = "1";
+    if ($('ce_height')) $('ce_height').value = "std";
+    if ($('ce_glazing')) $('ce_glazing').value = "0.20";
+    if ($('ce_basement')) $('ce_basement').value = "none";
+    if ($('ce_site')) $('ce_site').value = "flat";
+    if ($('ce_mep')) $('ce_mep').value = "standard";
+    if ($('ce_baths')) $('ce_baths').value = "2";
+    if ($('ce_incSitework')) $('ce_incSitework').checked = true;
+    ['ce_optSolar','ce_optStorage','ce_optGeo','ce_optRain','ce_optSeptic','ce_optHydronic','ce_optDriveway'].forEach(function (id) { var el = $(id); if (el) el.checked = false; });
+    if ($('ce_diameter')) $('ce_diameter').value = "";
+    if ($('ce_shellThk')) $('ce_shellThk').value = "4";
+    if ($('ce_mixType')) $('ce_mixType').value = "std";
+    if ($('ce_oculusCount')) $('ce_oculusCount').value = "0";
+    if ($('ce_connector')) $('ce_connector').value = "none";
+    if ($('ce_remote')) $('ce_remote').value = "easy";
+    if ($('ce_inflationPower')) $('ce_inflationPower').value = "onsite";
+    if ($('ce_lightning')) $('ce_lightning').checked = false;
+    if ($('ce_contPct')) $('ce_contPct').value = "10";
+
+    clearInputsStore();
+
+    var zero = {
+      totals: { low: 0, high: 0, lowPSF: 0, highPSF: 0, structurePSFout: 0, preLow: 0, preHigh: 0, contLow: 0, contHigh: 0 },
+      base: { structureCost: 0, glazingCost: 0, basementLow: 0, basementHigh: 0 },
+      parts: { regionFactor: 1, optsSum: 0, optLabels: [], shell: null, sitework: { low: 0, high: 0, included: true } },
+      items: [],
+      inp: { finish: 1, glazing: .2, domes: '1', height: 'std', site: 'flat', mep: 'standard', sf: 0, contPct: 0.10, opts: {}, baths: 2, expectedBaths: 1, drivewayLen: 0, includeSitework: true, basement: 'none', shellThk: 4, mixType: "std", oculusCount: 0, connector: "none", remote: "easy", inflationPower: "onsite", lightning: false }
+    };
+    lastEstimate = zero; lastInputs = zero.inp;
+    render(zero);
+    toggleDrivewayInputs();
+    updateRegionIdxBadge();
+    updateRangeFill($('ce_regionIdx'));
+  });
+});
+whenReady(['ce_printBtn'], function () {
+  $('ce_printBtn').addEventListener('click', async function () {
+    var inp = lastInputs || getInputs();
+    if (!inp || !inp.sf) { alert("Enter square footage and click Calculate first."); return; }
+    persistInputs(inp);
+    if (!isPaid()) { openPaywall(); return; }
+    var est = lastEstimate || compute(inp);
+    if (!lastEstimate) { render(est); lastEstimate = est; lastInputs = inp; }
+    try { await exportPDF(inp, est); hideUnlockToast(); } 
+    catch (err) { console.error(err); alert('Could not create the PDF.'); }
+  });
+});
+
+/* Paywall modal wiring */
+whenReady(['pw_payBtn','pw_closeBtn','pw_apply','pw_code','pw_msg'], function (payBtn, closeBtn, applyBtn, codeInput, msg) {
+  payBtn.addEventListener('click', gotoCheckout);
+  closeBtn.addEventListener('click', closePaywall);
+  applyBtn.addEventListener('click', function () {
+    var code = (codeInput.value || '').trim();
+    if (!ACCESS_CODE) { msg.textContent = "Access code is not enabled. Use the checkout button above."; return; }
+    if (code && code.toLowerCase() === ACCESS_CODE.toLowerCase()) {
+      setPaid();
+      msg.textContent = "Access granted. You can now export the PDF.";
+      setTimeout(closePaywall, 600);
+      unhideActions();
+      ensureJsPDF().catch(() => {});
+      showUnlockToast();
+    } else {
+      msg.textContent = "That code didn’t match. Please try again or use checkout.";
+    }
+  });
+});
+
+/* Init: restore saved state, render zero or saved, show actions if already paid */
+(function tryRestoreOnLoad() {
+  const saved = readInputsFromStore();
+  if (saved) {
+    fillFormFromInputs(saved);
+    const est = compute(saved);
+    lastInputs = saved; lastEstimate = est;
+    render(est);
+  } else {
+    render({
+      totals: { low: 0, high: 0, lowPSF: 0, highPSF: 0, structurePSFout: 0, preLow: 0, preHigh: 0, contLow: 0, contHigh: 0 },
+      base: { structureCost: 0, glazingCost: 0, basementLow: 0, basementHigh: 0 },
+      parts: { regionFactor: 1, optsSum: 0, optLabels: [], shell: null, sitework: { low: 0, high: 0, included: true } },
+      items: [],
+      inp: { finish: 1, glazing: .2, domes: '1', height: 'std', site: 'flat', mep: 'standard', sf: 0, contPct: 0.10, opts: {}, baths: 2, expectedBaths: 1, drivewayLen: 0, includeSitework: true, basement: 'none', shellThk: 4, mixType: "std", oculusCount: 0, connector: "none", remote: "easy", inflationPower: "onsite", lightning: false }
+    });
+  }
+  if (isPaid()) unhideActions();
+})();
+
+applyRegionPreset();
+toggleDrivewayInputs();
+updateRegionIdxBadge();
+updateRangeFill($('ce_regionIdx'));
+
+/* Stripe return: ?paid=1 or true → mark paid, clean URL, restore inputs, unhide, preload jsPDF, show toast */
+(function checkPaidReturn() {
+  try {
+    const usp = new URLSearchParams(window.location.search);
+    const val = usp.get(SUCCESS_PARAM);
+    if (val === '1' || val === 'true') {
+      setPaid();
+
+      // Clean URL to avoid re-trigger on refresh
+      if (history && history.replaceState) {
+        usp.delete(SUCCESS_PARAM);
+        const clean = window.location.pathname + (usp.toString() ? '?' + usp.toString() : '');
+        history.replaceState({}, document.title, clean);
+      }
+
+      const saved = readInputsFromStore();
+      if (saved) {
+        fillFormFromInputs(saved);
+        lastInputs = saved;
+        lastEstimate = compute(saved);
+        render(lastEstimate);
+      }
+
+      unhideActions();
+      ensureJsPDF().catch(() => {}); // warm-up for instant click
+      showUnlockToast();
+    }
+  } catch (e) {}
+})();
+});
+
   
