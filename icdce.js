@@ -1,3 +1,5 @@
+
+
 /* ===== ICD Cost Estimator — JS (Part 1/2) ===== */
 
 /* ---------- Simple DOM helpers ---------- */
@@ -765,18 +767,19 @@ function applyGates() {
   if (isPaid()) {
     // Fully unlocked
     ['Design and Envelope','Site and Systems','Other Site Factors'].forEach(lbl => unlockPanel(findPanelByAria(lbl)));
-    // Contingency remains open per your spec — no lock
-    unmaskMoney();
-    unwrapTeaser();
-  } else {
-    // Lock specific panels
-    lockPanel(findPanelByAria('Design and Envelope'), {title:'Premium Controls', cta:'Unlock Design & Envelope'});
-    lockPanel(findPanelByAria('Site and Systems'),   {title:'Premium Controls', cta:'Unlock Site & Systems'});
-    lockPanel(findPanelByAria('Other Site Factors'), {title:'Premium Controls', cta:'Unlock Other Factors'});
-    // Project Basics + Contingency remain unlocked
-    maskMoney();         // blur total $$, keep $/SF readable
-    wrapTeaser();        // show breakdown preview with fade + CTA
+    unmaskMoney();      // show all dollar amounts
+    unwrapTeaser();     // make sure no teaser wrapper remains
+    return;
   }
+
+  // Not paid: lock advanced sections (but still visible), blur money only
+  lockPanel(findPanelByAria('Design and Envelope'), {title:'Premium Controls', cta:'Unlock Design & Envelope'});
+  lockPanel(findPanelByAria('Site and Systems'),   {title:'Premium Controls', cta:'Unlock Site & Systems'});
+  lockPanel(findPanelByAria('Other Site Factors'), {title:'Premium Controls', cta:'Unlock Other Factors'});
+
+  // Keep Project Basics & Contingency interactive
+  maskMoney();     // <— this already blurs all money cells, including table Low/High
+  unwrapTeaser();  // <— ensure the table is NOT height-limited; full list is visible
 }
 /* ===== PDF (Part 2/2): jsPDF loader + export + wiring/init ===== */
 
