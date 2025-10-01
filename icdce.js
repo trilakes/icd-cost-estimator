@@ -1,566 +1,19 @@
-/* ===== ICD Cost Estimator — Full JS (4 sections) ===== */
-document.addEventListener('DOMContentLoaded', function () {
+/* ===== ICD Cost Estimator — JS (Part 1/2) ===== */
 
-  /* -------------------------------------------------------
-    1) Utilities, Config, Paywall, and State
-  --------------------------------------------------------*/
-  function whenReady(ids, cb, attempts = 20) {
-    const els = ids.map(id => document.getElementById(id));
-    if (els.every(Boolean)) { cb.apply(null, els); return; }
-    if (attempts <= 0) return;
-    setTimeout(function () { whenReady(ids, cb, attempts - 1); }, 100);
-  }
-  function $(id) { return document.getElementById(id); }
-  
-  /* Paywall Config */
-  const PAY_URL       = 'https://buy.stripe.com/4gMdR95Gl9cdddLch09MY00';
-  const SUCCESS_PARAM = 'paid';            // ?paid=1 or ?paid=true
-  const ACCESS_CODE   = 'FREE99';          // set '' to disable code
-  const STORE_KEY     = 'icdce_paid_test1d'; // remember paid locally
-  
-  /* State persistence (inputs) */
-  const STATE_KEY = 'icdce_state_v1';
-  function persistInputs(inp) { try { localStorage.setItem(STATE_KEY, JSON.stringify(inp)); } catch (_) {} }
-  function readInputsFromStore() {
-    try { const s = localStorage.getItem(STATE_KEY); return s ? JSON.parse(s) : null; } catch (_) { return null; }
-  }
-  function clearInputsStore() { try { localStorage.removeItem(STATE_KEY); } catch (_) {} }
-  
-  /* Paid flag */
-  function isPaid()  { try { return localStorage.getItem(STORE_KEY) === 'yes'; } catch (_) { return false; } }
-  function setPaid() { try { localStorage.setItem(STORE_KEY, 'yes'); } catch (_) {} }
-  function clearPaid(){ try { localStorage.removeItem(STORE_KEY); } catch (_) {} }
-  
-  /* Safe redirect (Stripe) */
-  function safeRedirect(url) {
-    try { if (window.top && window.top !== window.self) { window.top.location.href = url; return; } } catch (_) {}
-    try { window.location.assign(url); return; } catch (_) {}
-    try {
-      const a = document.createElement('a');
-      a.href = url; a.target = '_top'; a.rel = 'noopener';
-      document.body.appendChild(a); a.click(); a.remove(); return;
-    } catch (_) {}
-    const w = window.open(url, '_blank', 'noopener');
-    if (!w) alert('Please allow pop-ups to continue to checkout.');
-  }
-  
-  /* Ensure the main action buttons are visible/enabled */
-  function unhideActions() {
-    const sticky = $('icdce_sticky');
-    if (sticky) { sticky.style.display = 'flex'; sticky.setAttribute('aria-hidden', 'false'); }
-    ['ce_calcBtn','ce_clearBtn','ce_printBtn'].forEach(id => {
-      const el = $(id);
-      if (!el) return;
-      el.disabled = false;
-      el.style.display = '';            // undo inline display:none
-      el.removeAttribute('aria-hidden');
-      el.classList.remove('hidden','is-hidden'); // undo class-hiding
-    });
-  }
-  
-  /* Show/hide unlock toast (top banner with “Download PDF”) */
-  function showUnlockToast() {
-    const toast = $('icdce_unlocked');
-    if (!toast) return;
-    toast.classList.add('_show');
-    toast.setAttribute('aria-hidden', 'false');
-  
-    const quickBtn = $('icdce_unlocked_btn');
-    if (quickBtn) {
-      quickBtn.onclick = async function () {
-        const inp = lastInputs || getInputs();
-        if (!inp || !inp.sf) { alert("Enter square footage and click Calculate first."); return; }
-        const est = lastEstimate || compute(inp);
-        try { await exportPDF(inp, est); hideUnlockToast(); } 
-        catch (err) { console.error(err); alert('Could not create the PDF.'); }
-      };
-    }
-  }
-  function hideUnlockToast() {
-    const toast = $('icdce_unlocked');
-    if (!toast) return;
-    toast.classList.remove('_show');
-    toast.setAttribute('aria-hidden', 'true');
-  }
-  
-  /* Paywall modal */
-  function openPaywall() {
-    const el = $('icdce_paywall');
-    if (!el) { safeRedirect(PAY_URL); return; }
-    el.style.display = 'flex';
-    el.setAttribute('aria-hidden', 'false');
-  }
-  function closePaywall() {
-    const el = $('icdce_paywall');
-    if (!el) return;
-    el.style.display = 'none';
-    el.setAttribute('aria-hidden', 'true');
-  }
-  function gotoCheckout() {
-    const inp = getInputs();
-    if (inp && inp.sf > 0) persistInputs(inp);
-    safeRedirect(PAY_URL);
-  }
-  
-  /* -------------------------------------------------------
-    2) Estimator Config & Core Logic
-  --------------------------------------------------------*/
-  var CONFIG = {
-    priceCal: 0.93,
-    glazingEnvelopeSFPerInteriorSF: 0.35,
-    shellUnit: {
-      airform_per_shell_sf: [12, 18],
-      foam_per_shell_sf: [9, 14],
-      shotcrete_per_shell_sf: [20, 28],
-      rebar_per_int_sf: [9, 14]
-    },
-    domes: { "1": 1.00, "2": 1.07, "3": 1.12 },
-    height: { std: 1.00, tall: 1.05 },
-    siteStaging: { flat: 1.00, moderate: 1.05, complex: 1.10 },
-    mep: { simple: 0.97, standard: 1.00, advanced: 1.10 },
-    site: { flat: 1.00, moderate: 1.08, complex: 1.15 },
-    finish: { 0.95: 0.95, 1.00: 1.00, 1.20: 1.20, 1.35: 1.35 },
-    glazingCostPerSF: { 0.10: 110, 0.20: 125, 0.30: 160, 0.40: 200 },
-    basementAdders: { none: [0, 0], partial: [35, 60], full: [55, 95] },
-    options: {
-      solar: 20000, storage: 18000, geo: 45000,
-      rain: 12000, septic: 35000, hydronic: 20000,
-      drivewayPerFt: 80, drivewayMaxFt: 150
-    },
-    rangeLowPct: -0.05, rangeHighPct: 0.07,
-    multipliers: {
-      site: { flat: 1.00, moderate: 1.20, complex: 1.45 },
-      mep: { simple: 0.95, standard: 1.00, advanced: 1.12 }
-    },
-    unitCosts: {
-      // PRE-CONSTRUCTION
-      designDocsPSF: [4, 8],
-      permitsFeesPSF: [2, 4],
-      surveyGeotechLump: [2500, 6000],
-      mobilizationLump: [3000, 9000],
-      // SITE & FOUNDATION (excludes shell)
-      siteworkPSF: [12, 22],
-      utilitiesStubPSF: [6, 12],
-      foundationPSF: [22, 35],
-      // INTERIORS
-      interiorFramingPSF: [14, 22],
-      insulDrywallPSF: [12, 20],
-      flooringFinishesPSF: [18, 35],
-      millworkDoorsPSF: [8, 16],
-      // SYSTEMS (MEP)
-      plumbingPSF: [14, 22],
-      electricalPSF: [14, 22],
-      hvacPSF: [18, 32],
-      specialSystemsPSF: [3, 6],
-      // EXTERIOR (non-glazing)
-      exteriorFinishPSF: [8, 16],
-      // ALLOWANCES
-      kitchenBathPSF: [20, 45],
-      appliancesLump: [6000, 12000],
-      // Dome-specific
-      oculusCurbLumpPerEa: [900, 1600],
-      connectorShellShort: [6000, 11000],
-      connectorShellMed: [12000, 20000],
-      connectorShellLong: [24000, 42000],
-      generatorRentalLump: [900, 1800],
-      remoteLogisticsAdderLump: { easy: [0,0], moderate: [1800,3600], remote: [6000,12000] },
-      transitionWaterproofLump: [900, 1800],
-      lightningProtectionLump: [1200, 2200]
-    },
-    shellThicknessMult: { 4: 1.00, 5: 1.12, 6: 1.25 },
-    mixTypeMult: { std: 1.00, pozz: 1.06, hemp: 1.18 }
-  };
-  
-  function money(n)  { return "$" + (isFinite(n) ? n : 0).toLocaleString(undefined, { maximumFractionDigits: 0 }); }
-  function money0(n) { return "$" + (isFinite(n) ? n : 0).toLocaleString(undefined, { maximumFractionDigits: 0 }); }
-  function cal(v)    { return v * CONFIG.priceCal; }
-  
-  var lastEstimate = null, lastInputs = null;
-  
-  function getInputs() {
-    return {
-      sf: +($('ce_sf')?.value || 0),
-      regionPreset: +($('ce_region')?.value || 1),
-      regionIdx: +($('ce_regionIdx')?.value || 1),
-      finish: +($('ce_finish')?.value || 1),
-      domes: $('ce_domes')?.value || '1',
-      height: $('ce_height')?.value || 'std',
-      glazing: +($('ce_glazing')?.value || 0.2),
-      basement: $('ce_basement')?.value || 'none',
-      site: $('ce_site')?.value || 'flat',
-      mep: $('ce_mep')?.value || 'standard',
-      baths: Math.max(1, +($('ce_baths')?.value || 2)),
-      includeSitework: !!$('ce_incSitework')?.checked,
-      opts: {
-        solar: !!$('ce_optSolar')?.checked, storage: !!$('ce_optStorage')?.checked, geo: !!$('ce_optGeo')?.checked,
-        rain: !!$('ce_optRain')?.checked, septic: !!$('ce_optSeptic')?.checked, hydronic: !!$('ce_optHydronic')?.checked,
-        driveway: !!$('ce_optDriveway')?.checked
-      },
-      drivewayLen: Math.max(0, Math.min(+($('ce_driveLen')?.value || 0), CONFIG.options.drivewayMaxFt)),
-      contPct: (+($('ce_contPct')?.value || 10)) / 100,
-      diameter: +($('ce_diameter')?.value || 0),
-      shellThk: +($('ce_shellThk')?.value || 4),
-      mixType: $('ce_mixType')?.value || "std",
-      oculusCount: +($('ce_oculusCount')?.value || 0),
-      connector: $('ce_connector')?.value || "none",
-      remote: $('ce_remote')?.value || "easy",
-      inflationPower: $('ce_inflationPower')?.value || "onsite",
-      lightning: !!$('ce_lightning')?.checked
-    };
-  }
-  
-  function bathFactors(inp) {
-    var expected = Math.max(1, Math.round((inp.sf || 0) / 900));
-    var delta = (inp.baths || expected) - expected;
-    function clamp(x, lo, hi) { return Math.min(hi, Math.max(lo, x)); }
-    var bathPF = clamp(1 + 0.07 * delta, 0.85, 1.25);
-    var bathUF = clamp(1 + 0.03 * delta, 0.90, 1.15);
-    var bathSF = clamp(1 + 0.03 * delta, 0.90, 1.15);
-    return { expected, delta, bathPF, bathUF, bathSF };
-  }
-  
-  function computeBaseShell(inp, regionFactor) {
-    var shellSurfaceSF = inp.sf * CONFIG.glazingEnvelopeSFPerInteriorSF;
-    var domesMult = CONFIG.domes[inp.domes] || 1;
-    var heightMult = CONFIG.height[inp.height] || 1;
-    var siteStageMult = CONFIG.siteStaging[inp.site] || 1;
-    var m = regionFactor * domesMult * heightMult * siteStageMult;
-  
-    var u = CONFIG.shellUnit;
-    function pick(loHi) { return [cal(loHi[0] * m), cal(loHi[1] * m)]; }
-    var air = pick(u.airform_per_shell_sf);
-    var foam = pick(u.foam_per_shell_sf);
-    var shot = pick(u.shotcrete_per_shell_sf);
-    var thicknessMult = CONFIG.shellThicknessMult[inp.shellThk] || 1;
-    var mixMult = CONFIG.mixTypeMult[inp.mixType] || 1;
-    shot = [shot[0] * thicknessMult * mixMult, shot[1] * thicknessMult * mixMult];
-    var reb = pick(u.rebar_per_int_sf);
-    reb = [reb[0] * thicknessMult * mixMult, reb[1] * thicknessMult * mixMult];
-  
-    var airCost = [air[0] * shellSurfaceSF, air[1] * shellSurfaceSF];
-    var foamCost = [foam[0] * shellSurfaceSF, foam[1] * shellSurfaceSF];
-    var shotCost = [shot[0] * shellSurfaceSF, shot[1] * shellSurfaceSF];
-    var rebarCost = [reb[0] * inp.sf, reb[1] * inp.sf];
-  
-    var low = airCost[0] + foamCost[0] + shotCost[0] + rebarCost[0];
-    var high = airCost[1] + foamCost[1] + shotCost[1] + rebarCost[1];
-    var mid = (low + high) / 2;
-  
-    return {
-      shellSurfaceSF,
-      components: {
-        airform: { low: airCost[0], high: airCost[1] },
-        foam: { low: foamCost[0], high: foamCost[1] },
-        shotcrete: { low: shotCost[0], high: shotCost[1] },
-        rebar: { low: rebarCost[0], high: rebarCost[1] }
-      },
-      totalMid: mid
-    };
-  }
-  
-  function compute(inp) {
-    var regionFactor = inp.regionIdx || inp.regionPreset || 1;
-  
-    // Base dome shell
-    var shell = computeBaseShell(inp, regionFactor);
-    var structureCost = shell.totalMid;
-  
-    // Glazing
-    var shellSurfaceSF = inp.sf * CONFIG.glazingEnvelopeSFPerInteriorSF;
-    var glazingSF = shellSurfaceSF * inp.glazing;
-    var glazingUnit = CONFIG.glazingCostPerSF[inp.glazing] || 0;
-    var glazingCost = cal(glazingSF * glazingUnit * regionFactor);
-  
-    // Basement
-    var adder = CONFIG.basementAdders[inp.basement] || [0, 0];
-    var cov = inp.basement === 'partial' ? 0.5 : (inp.basement === 'full' ? 1 : 0);
-    var basementLow = cal(adder[0] * inp.sf * cov * regionFactor);
-    var basementHigh = cal(adder[1] * inp.sf * cov * regionFactor);
-  
-    // Multipliers
-    var siteMultItems = CONFIG.multipliers.site[inp.site] || 1;
-    var mepMultItems = CONFIG.multipliers.mep[inp.mep] || 1;
-    var finishMultItems = CONFIG.finish[inp.finish] || 1;
-    var bf = bathFactors(inp);
-  
-    function psf(loHi)      { return [cal(loHi[0] * regionFactor), cal(loHi[1] * regionFactor)]; }
-    function psfSite(loHi)  { var p = psf(loHi); return [p[0] * siteMultItems, p[1] * siteMultItems]; }
-    function psfFinish(loHi){ var p = psf(loHi); return [p[0] * finishMultItems, p[1] * finishMultItems]; }
-    function psfMEP(loHi)   { var p = psf(loHi); return [p[0] * mepMultItems, p[1] * mepMultItems]; }
-    function lump(loHi, m)  { m = m || 1; return [cal(loHi[0] * regionFactor * m), cal(loHi[1] * regionFactor * m)]; }
-  
-    var I = CONFIG.unitCosts;
-    var items = [];
-  
-    // PRE-CONSTRUCTION
-    var a = psf(I.designDocsPSF);
-    items.push({ cat: "Pre-Construction", name: "Design & Construction Documents", desc: "Full architecture/engineering and coordinated construction drawings", low: a[0] * inp.sf, high: a[1] * inp.sf });
-    var b = psf(I.permitsFeesPSF);
-    items.push({ cat: "Pre-Construction", name: "Permits & Agency Fees", desc: "Plan review, building permit, utility/tap fees where applicable", low: b[0] * inp.sf, high: b[1] * inp.sf });
-    var c = lump(I.surveyGeotechLump, siteMultItems);
-    items.push({ cat: "Pre-Construction", name: "Survey & Geotechnical", desc: "Boundary/topographic survey and geotechnical (soils) report", low: c[0], high: c[1] });
-    var d = lump(I.mobilizationLump, siteMultItems);
-    items.push({ cat: "Pre-Construction", name: "Mobilization", desc: "Staging, temporary power/water, delivery logistics setup", low: d[0], high: d[1] });
-  
-    // SITE & FOUNDATION (non-shell)
-    var siteworkPSF = psfSite(I.siteworkPSF);
-    var siteworkLow = inp.includeSitework ? siteworkPSF[0] * inp.sf : 0;
-    var siteworkHigh = inp.includeSitework ? siteworkPSF[1] * inp.sf : 0;
-    items.push({ cat: "Site & Foundation", name: "Sitework & Rough Grading", desc: (inp.includeSitework ? "Clearing, rough grading, temporary access, erosion control" : "Excluded (by owner/others)"), low: siteworkLow, high: siteworkHigh });
-  
-    b = psfSite(I.utilitiesStubPSF); b[0] *= bf.bathUF; b[1] *= bf.bathUF;
-    items.push({ cat: "Site & Foundation", name: "Utilities Stub-ins", desc: "Trenching and laterals for water/septic/electric to the shell", low: b[0] * inp.sf, high: b[1] * inp.sf });
-  
-    var f = psfSite(I.foundationPSF);
-    items.push({ cat: "Site & Foundation", name: "Foundation / Slab / Footings", desc: "Footings, slab, anchors — basement costs shown separately", low: f[0] * inp.sf, high: f[1] * inp.sf });
-  
-    items.push({ cat: "Site & Foundation", name: "Basement", desc: inp.basement === 'none' ? 'None (slab only)' : inp.basement === 'partial' ? 'Partial (~50% footprint)' : 'Full (~100% footprint)', low: basementLow, high: basementHigh });
-  
-    // CORE STRUCTURE (shell)
-    items.push({ cat: "Core Structure", name: "Base Dome Shell (Airform, Foam, Rebar, Shotcrete)", desc: "Airform membrane, spray foam insulation, rebar, shotcrete structural shell (multipliers: region/domes/height/site)", low: structureCost, high: structureCost });
-  
-    if (inp.oculusCount > 0) {
-      var oculus = lump(I.oculusCurbLumpPerEa);
-      items.push({ cat: "Core Structure", name: "Oculus/Skylights Curbs", desc: inp.oculusCount + " unit" + (inp.oculusCount === 1 ? "" : "s"), low: oculus[0] * inp.oculusCount, high: oculus[1] * inp.oculusCount });
-    }
-    if (inp.connector !== "none") {
-      var connectorLump = inp.connector === "short" ? I.connectorShellShort : inp.connector === "med" ? I.connectorShellMed : I.connectorShellLong;
-      var connectorCost = lump(connectorLump);
-      items.push({ cat: "Core Structure", name: "Connector / Tunnel (Shell)", desc: inp.connector.charAt(0).toUpperCase() + inp.connector.slice(1) + " connector", low: connectorCost[0], high: connectorCost[1] });
-    }
-  
-    // EXTERIOR
-    a = psfFinish(I.exteriorFinishPSF);
-    items.push({ cat: "Exterior", name: "Exterior Finishes / Coatings", desc: "Membrane topcoat/paint and trims at shell openings", low: a[0] * inp.sf, high: a[1] * inp.sf });
-    var transWp = lump(I.transitionWaterproofLump);
-    items.push({ cat: "Exterior", name: "Transition Waterproofing at Openings", desc: "Waterproofing transitions around openings", low: transWp[0], high: transWp[1] });
-    items.push({ cat: "Exterior", name: "Windows & Glazed Openings", desc: (inp.glazing * 100).toFixed(0) + "% of shell surface @ $" + (CONFIG.glazingCostPerSF[inp.glazing] || 0) + "/SF", low: glazingCost, high: glazingCost });
-  
-    // INTERIORS
-    a = psfFinish(I.interiorFramingPSF);
-    items.push({ cat: "Interiors", name: "Interior Framing & Partitions", desc: "Non-structural partitions and basic framing details", low: a[0] * inp.sf, high: a[1] * inp.sf });
-    b = psfFinish(I.insulDrywallPSF);
-    items.push({ cat: "Interiors", name: "Insulation & Drywall", desc: "Thermal/sound insulation plus drywall hang, tape and texture", low: b[0] * inp.sf, high: b[1] * inp.sf });
-    c = psfFinish(I.flooringFinishesPSF);
-    items.push({ cat: "Interiors", name: "Flooring & Interior Finishes", desc: "LVT/tile/carpet, interior paint and finish carpentry", low: c[0] * inp.sf, high: c[1] * inp.sf });
-    d = psfFinish(I.millworkDoorsPSF);
-    items.push({ cat: "Interiors", name: "Millwork, Interior Doors & Trim", desc: "Interior doors, casing/base, basic built-ins/shelving", low: d[0] * inp.sf, high: d[1] * inp.sf });
-  
-    // SYSTEMS (MEP)
-    a = psfMEP(I.plumbingPSF); a[0] *= bf.bathPF; a[1] *= bf.bathPF;
-    items.push({ cat: "Systems (MEP)", name: "Plumbing (rough-in + fixtures)", desc: "Supply/drain/vent, water heater and standard plumbing fixtures", low: a[0] * inp.sf, high: a[1] * inp.sf });
-  
-    b = psfMEP(I.electricalPSF); b[0] *= bf.bathPF; b[1] *= bf.bathPF;
-    items.push({ cat: "Systems (MEP)", name: "Electrical (rough-in + devices)", desc: "Service/panels, branch circuits, devices and light fixtures", low: b[0] * inp.sf, high: b[1] * inp.sf });
-  
-    c = psfMEP(I.hvacPSF);
-    items.push({ cat: "Systems (MEP)", name: "HVAC / Mechanical", desc: "Heat pump/furnace/air handler and distribution (ducted/ductless)", low: c[0] * inp.sf, high: c[1] * inp.sf });
-  
-    d = psfMEP(I.specialSystemsPSF); d[0] *= bf.bathSF; d[1] *= bf.bathSF;
-    items.push({ cat: "Systems (MEP)", name: "Special Systems", desc: "ERV/HRV, simple controls and minor low-voltage allowances", low: d[0] * inp.sf, high: d[1] * inp.sf });
-  
-    // ALLOWANCES
-    a = psfFinish(I.kitchenBathPSF);
-    items.push({ cat: "Allowances", name: "Kitchens & Baths Package", desc: "Cabinetry, counters, tile and shower glass finishes", low: a[0] * inp.sf, high: a[1] * inp.sf });
-    b = lump(I.appliancesLump, finishMultItems);
-    items.push({ cat: "Allowances", name: "Appliances", desc: "Typical kitchen + laundry appliance package", low: b[0], high: b[1] });
-  
-    // Site additions
-    if (inp.inflationPower === "generator") {
-      var genRental = lump(I.generatorRentalLump);
-      items.push({ cat: "Site & Foundation", name: "Inflation Power (Generator rental)", desc: "Generator rental for inflation power", low: genRental[0], high: genRental[1] });
-    }
-    var remoteLump = lump(I.remoteLogisticsAdderLump[inp.remote], siteMultItems);
-    items.push({ cat: "Site & Foundation", name: "Remote Logistics / Access", desc: "Access/logistics cost for remote sites (" + inp.remote + ")", low: remoteLump[0], high: remoteLump[1] });
-  
-    // Optional systems
-    var optLabels = [], optsSum = 0;
-    if (inp.opts.solar)   { optsSum += cal(CONFIG.options.solar   * regionFactor); optLabels.push('Solar PV'); }
-    if (inp.opts.storage) { optsSum += cal(CONFIG.options.storage * regionFactor); optLabels.push('Battery Storage'); }
-    if (inp.opts.geo)     { optsSum += cal(CONFIG.options.geo     * regionFactor); optLabels.push('Geothermal'); }
-    if (inp.opts.rain)    { optsSum += cal(CONFIG.options.rain    * regionFactor); optLabels.push('Rainwater collection / cistern'); }
-    if (inp.opts.hydronic){ optsSum += cal(CONFIG.options.hydronic* regionFactor); optLabels.push('Hydronic Radiant Floors'); }
-    if (inp.opts.septic)  { optsSum += cal(CONFIG.options.septic  * regionFactor * (CONFIG.site[inp.site] || 1)); optLabels.push('Septic'); }
-    if (inp.opts.driveway && inp.drivewayLen > 0) {
-      var len = Math.min(inp.drivewayLen, CONFIG.options.drivewayMaxFt);
-      var drivewayCost = cal(len * CONFIG.options.drivewayPerFt * regionFactor * (CONFIG.site[inp.site] || 1));
-      optsSum += drivewayCost; optLabels.push("Driveway (~" + len + " ft)");
-    }
-  
-    // Lightning
-    if (inp.lightning) {
-      var lightningCost = lump(I.lightningProtectionLump);
-      items.push({ cat: "Closeout & Site Services", name: "Lightning Protection / Grounding", desc: "Provision for lightning protection", low: lightningCost[0], high: lightningCost[1] });
-    }
-  
-    // Totals (contingency only)
-    var preLow  = items.reduce((a, it) => a + it.low, 0);
-    var preHigh = items.reduce((a, it) => a + it.high, 0);
-    var contLow  = preLow  * (inp.contPct || 0);
-    var contHigh = preHigh * (inp.contPct || 0);
-    var low  = (preLow  + contLow  + optsSum) * (1 + CONFIG.rangeLowPct);
-    var high = (preHigh + contHigh + optsSum) * (1 + CONFIG.rangeHighPct);
-  
-    return {
-      inp: Object.assign({}, inp, { expectedBaths: bf.expected }),
-      parts: {
-        regionFactor,
-        optsSum, optLabels,
-        shell: shell,
-        sitework: { low: siteworkLow, high: siteworkHigh, included: inp.includeSitework }
-      },
-      items: items,
-      base: { structureCost: structureCost, glazingCost: glazingCost, basementLow: basementLow, basementHigh: basementHigh },
-      totals: {
-        preLow, preHigh, contLow, contHigh,
-        low, high,
-        lowPSF: low / Math.max(inp.sf, 1),
-        highPSF: high / Math.max(inp.sf, 1),
-        structurePSFout: structureCost / Math.max(inp.sf, 1)
-      }
-    };
-  }
-  
-  function render(est) {
-    var inp = est.inp || {};
-    if (!inp.sf) {
-      $('ce_rangeTotal')   && ($('ce_rangeTotal').textContent = "$0 – $0");
-      $('ce_rangePerSf')   && ($('ce_rangePerSf').textContent = "$/SF: $0 – $0");
-      $('ce_baseTotal')    && ($('ce_baseTotal').textContent = "$0");
-      $('ce_basePsf')      && ($('ce_basePsf').textContent = "$/SF: $0");
-      $('ce_siteworkTotal')&& ($('ce_siteworkTotal').textContent = "$0 – $0");
-      $('ce_siteworkNote') && ($('ce_siteworkNote').textContent = "Included");
-      $('ce_assumptions')  && ($('ce_assumptions').textContent = "Region 1.00 • Standard finish • Typical glazing • Single dome");
-      if ($('ce_breakdown')) $('ce_breakdown').innerHTML =
-        '<tr><td colspan="4" class="_muted" style="text-align:center;padding:18px">Run a calculation to see details.</td></tr>';
-      return;
-    }
-  
-    $('ce_rangeTotal') && ($('ce_rangeTotal').textContent = money(est.totals.low) + " – " + money(est.totals.high));
-    $('ce_rangePerSf') && ($('ce_rangePerSf').textContent = "$/SF: " + money(est.totals.lowPSF) + " – " + money(est.totals.highPSF));
-    $('ce_baseTotal')  && ($('ce_baseTotal').textContent  = money(est.base.structureCost));
-    $('ce_basePsf')    && ($('ce_basePsf').textContent    = "$/SF: " + money(est.totals.structurePSFout));
-  
-    var sw = est.parts.sitework;
-    $('ce_siteworkTotal') && ($('ce_siteworkTotal').textContent = money(sw.low) + " – " + money(sw.high));
-    $('ce_siteworkNote')  && ($('ce_siteworkNote').textContent  = sw.included ? "Included" : "Excluded");
-  
-    var optStr = (est.parts.optLabels && est.parts.optLabels.length) ? (" • Options: " + est.parts.optLabels.join(', ')) : '';
-    var basementStr = inp.basement === 'none' ? 'No basement (slab)' : inp.basement === 'partial' ? 'Partial basement (~50%)' : 'Full basement (~100%)';
-    $('ce_assumptions') && ($('ce_assumptions').textContent =
-      "Region " + est.parts.regionFactor.toFixed(2) +
-      " • Finish " + (+inp.finish || 1).toFixed(2) +
-      " • " + ((+inp.glazing || 0) * 100).toFixed(0) + "% glazing" +
-      " • " + inp.domes + " dome" + (inp.domes === '1' ? '' : 's') +
-      " • " + (inp.height === 'tall' ? 'tall shell' : 'std shell') +
-      " • " + basementStr +
-      " • " + inp.site + " site" +
-      " • " + (sw.included ? "Sitework included" : "Sitework excluded") +
-      " • " + inp.mep + " MEP" +
-      " • " + inp.baths + " bath" + (inp.baths > 1 ? 's' : '') + optStr +
-      " • Shell " + inp.shellThk + "″" +
-      " • Mix: " + (inp.mixType === 'pozz' ? 'Pozzolan' : (inp.mixType === 'hemp' ? 'Hempcrete' : 'Standard')) +
-      (inp.connector !== "none" ? " • Connector: " + inp.connector : "") +
-      (inp.oculusCount > 0 ? " • Oculus: " + inp.oculusCount : "") +
-      " • Access: " + inp.remote +
-      " • Inflation power: " + (inp.inflationPower === 'generator' ? 'Generator' : 'On-site')
-    );
-  
-    var rows = [], currentCat = null;
-    est.items.forEach(function (it) {
-      if (it.cat !== currentCat) { currentCat = it.cat; rows.push(["— " + currentCat + " —", "", "", ""]); }
-      rows.push([it.name, it.desc, it.low, it.high]);
-    });
-  
-    rows.push(["Subtotal (pre contingency)", "All line items above", est.totals.preLow, est.totals.preHigh]);
-    rows.push(["Contingency", (est.inp.contPct * 100).toFixed(1) + "%", est.totals.contLow, est.totals.contHigh]);
-    if (est.parts.optsSum) { rows.push(["Optional systems", est.parts.optLabels.join(' + '), est.parts.optsSum, est.parts.optsSum]); }
-  
-    var withContLow  = est.totals.preLow + est.totals.contLow + (est.parts.optsSum || 0);
-    var withContHigh = est.totals.preHigh + est.totals.contHigh + (est.parts.optsSum || 0);
-    var spreadLow  = withContLow  * (-0.05);
-    var spreadHigh = withContHigh * (0.07);
-    rows.push(["Range spread", "-5% / +7%", spreadLow, spreadHigh]);
-    rows.push(["Total (rounded)", "Low / High", est.totals.low, est.totals.high]);
-  
-    if ($('ce_breakdown')) {
-      $('ce_breakdown').innerHTML = rows.map(function (r) {
-        var isDivider = (r[0] || "").indexOf("— ") === 0;
-        if (isDivider) return '<tr><td colspan="4" style="background:#f1f5f9;color:#0b1320;font-weight:700">' + r[0] + '</td></tr>';
-        return '<tr><td>' + r[0] + '</td><td class="_muted">' + r[1] + '</td><td class="_right">' + money(r[2]) + '</td><td class="_right">' + money(r[3]) + '</td></tr>';
-      }).join('');
-    }
-  }
-  
-  /* Fill form with saved inputs */
-  function fillFormFromInputs(inp) {
-    if (!inp) return;
-    function setVal(id, val) { const el = $(id); if (el) el.value = String(val); }
-    function setCheck(id, v) { const el = $(id); if (el) el.checked = !!v; }
-  
-    setVal('ce_sf', inp.sf ?? '');
-    setVal('ce_region', inp.regionPreset ?? '1.00');
-    setVal('ce_regionIdx', inp.regionIdx ?? '1.00');
-    setVal('ce_finish', inp.finish ?? '1.00');
-    setVal('ce_domes', inp.domes ?? '1');
-    setVal('ce_height', inp.height ?? 'std');
-    setVal('ce_glazing', inp.glazing ?? '0.20');
-    setVal('ce_basement', inp.basement ?? 'none');
-    setVal('ce_site', inp.site ?? 'flat');
-    setVal('ce_mep', inp.mep ?? 'standard');
-    setVal('ce_baths', inp.baths ?? '2');
-    setCheck('ce_incSitework', !!inp.includeSitework);
-  
-    setCheck('ce_optSolar',   inp?.opts?.solar);
-    setCheck('ce_optStorage', inp?.opts?.storage);
-    setCheck('ce_optGeo',     inp?.opts?.geo);
-    setCheck('ce_optRain',    inp?.opts?.rain);
-    setCheck('ce_optSeptic',  inp?.opts?.septic);
-    setCheck('ce_optHydronic',inp?.opts?.hydronic);
-    setCheck('ce_optDriveway',inp?.opts?.driveway);
-  
-    setVal('ce_driveLen', inp.drivewayLen ?? 0);
-    setVal('ce_contPct',  (inp.contPct ?? 0.10) * 100);
-  
-    setVal('ce_diameter', inp.diameter ?? '');
-    setVal('ce_shellThk', inp.shellThk ?? 4);
-    setVal('ce_mixType',  inp.mixType  ?? 'std');
-    setVal('ce_oculusCount', inp.oculusCount ?? 0);
-    setVal('ce_connector',   inp.connector   ?? 'none');
-    setVal('ce_remote',      inp.remote      ?? 'easy');
-    setVal('ce_inflationPower', inp.inflationPower ?? 'onsite');
-    setCheck('ce_lightning', inp.lightning);
-  
-    updateRegionIdxBadge();
-    updateRangeFill($('ce_regionIdx'));
-    toggleDrivewayInputs();
-  }
-  
- /* -------------------------------------------------------
-    3) PDF Export (jsPDF loader + generator)
---------------------------------------------------------*/
-function ensureJsPDF() {
-  return new Promise(function (resolve, reject) {
-    var hasCore = !!(window.jspdf && window.jspdf.jsPDF);
-    var hasAT   = !!(window.jspdf && window.jspdf.autoTable);
-    if (hasCore && hasAT) return resolve();
-    function load(src) {
-      return new Promise(function (res, rej) {
-        var s = document.createElement('script');
-        s.src = src; s.async = true;
-        s.onload = res; s.onerror = function () { rej(new Error('Failed to load ' + src)); };
-        document.head.appendChild(s);
-      });
-    }
-    (hasCore ? Promise.resolve()
-             : load('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'))
-    .then(function () { return hasAT ? Promise.resolve()
-             : load('https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js'); })
-    .then(resolve).catch(reject);
-  });
+/* ---------- Simple DOM helpers ---------- */
+function whenReady(ids, cb, attempts = 20) {
+  const els = ids.map(id => document.getElementById(id));
+  if (els.every(Boolean)) { cb.apply(null, els); return; }
+  if (attempts <= 0) return;
+  setTimeout(function () { whenReady(ids, cb, attempts - 1); }, 100);
 }
+function $(id) { return document.getElementById(id); }
 
-/* ===== helpers for labels ===== */
+/* ---------- Formatting ---------- */
+function money(n)  { return "$" + (isFinite(n) ? n : 0).toLocaleString(undefined, { maximumFractionDigits: 0 }); }
+function money0(n) { return "$" + (isFinite(n) ? n : 0).toLocaleString(undefined, { maximumFractionDigits: 0 }); }
+
+/* ---------- Labels ---------- */
 function regionLabel(f) {
   if (f < 0.90) return 'Low-cost';
   if (f < 1.10) return 'Standard';
@@ -568,7 +21,6 @@ function regionLabel(f) {
   return 'Very high';
 }
 function finishLabel(mult) {
-  // exact map first; fallbacks by threshold
   if (mult === 0.95) return 'Economy';
   if (mult === 1.00) return 'Standard';
   if (mult === 1.20) return 'Premium';
@@ -579,7 +31,641 @@ function finishLabel(mult) {
   return 'Luxury';
 }
 
-/* ===== PDF helpers (footer, save/open) ===== */
+/* ---------- Paywall Config ---------- */
+const PAY_URL       = 'https://buy.stripe.com/4gMdR95Gl9cdddLch09MY00';
+const SUCCESS_PARAM = 'paid';
+const ACCESS_CODE   = 'FREE99';                 // set '' to disable code
+const STORE_KEY     = 'icdce_paid_test1d';      // remember paid locally
+const STATE_KEY     = 'icdce_state_v1';         // inputs
+
+/* ---------- Local storage helpers ---------- */
+function persistInputs(inp) { try { localStorage.setItem(STATE_KEY, JSON.stringify(inp)); } catch (_) {} }
+function readInputsFromStore() {
+  try { const s = localStorage.getItem(STATE_KEY); return s ? JSON.parse(s) : null; } catch (_) { return null; }
+}
+function clearInputsStore() { try { localStorage.removeItem(STATE_KEY); } catch (_) {} }
+
+function isPaid()  { try { return localStorage.getItem(STORE_KEY) === 'yes'; } catch (_) { return false; } }
+function setPaid() { try { localStorage.setItem(STORE_KEY, 'yes'); } catch (_) {} }
+function clearPaid(){ try { localStorage.removeItem(STORE_KEY); } catch (_) {} }
+
+/* ---------- Checkout helpers ---------- */
+function safeRedirect(url) {
+  try { if (window.top && window.top !== window.self) { window.top.location.href = url; return; } } catch (_) {}
+  try { window.location.assign(url); return; } catch (_) {}
+  try {
+    const a = document.createElement('a');
+    a.href = url; a.target = '_top'; a.rel = 'noopener';
+    document.body.appendChild(a); a.click(); a.remove(); return;
+  } catch (_) {}
+  const w = window.open(url, '_blank', 'noopener');
+  if (!w) alert('Please allow pop-ups to continue to checkout.');
+}
+function openPaywall() {
+  const el = $('icdce_paywall');
+  if (!el) { safeRedirect(PAY_URL); return; }
+  el.style.display = 'flex';
+  el.setAttribute('aria-hidden', 'false');
+}
+function closePaywall() {
+  const el = $('icdce_paywall');
+  if (!el) return;
+  el.style.display = 'none';
+  el.setAttribute('aria-hidden', 'true');
+}
+function gotoCheckout() {
+  const inp = getInputs();
+  if (inp && inp.sf > 0) persistInputs(inp);
+  safeRedirect(PAY_URL);
+}
+function unhideActions() {
+  const sticky = $('icdce_sticky');
+  if (sticky) { sticky.style.display = 'flex'; sticky.setAttribute('aria-hidden', 'false'); }
+  ['ce_calcBtn','ce_clearBtn','ce_printBtn'].forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    el.disabled = false;
+    el.style.display = '';            // undo inline display:none
+    el.removeAttribute('aria-hidden');
+    el.classList.remove('hidden','is-hidden'); // undo class-hiding
+  });
+}
+function showUnlockToast() {
+  const toast = $('icdce_unlocked');
+  if (!toast) return;
+  toast.classList.add('_show');
+  toast.setAttribute('aria-hidden', 'false');
+}
+function hideUnlockToast() {
+  const toast = $('icdce_unlocked');
+  if (!toast) return;
+  toast.classList.remove('_show');
+  toast.setAttribute('aria-hidden', 'true');
+}
+
+/* -------------------------------------------------------
+   Estimator Config & Core Logic
+--------------------------------------------------------*/
+var CONFIG = {
+  priceCal: 0.93,
+  glazingEnvelopeSFPerInteriorSF: 0.35,
+  shellUnit: {
+    airform_per_shell_sf: [12, 18],
+    foam_per_shell_sf: [9, 14],
+    shotcrete_per_shell_sf: [20, 28],
+    rebar_per_int_sf: [9, 14]
+  },
+  domes: { "1": 1.00, "2": 1.07, "3": 1.12 },
+  height: { std: 1.00, tall: 1.05 },
+  siteStaging: { flat: 1.00, moderate: 1.05, complex: 1.10 },
+  mep: { simple: 0.97, standard: 1.00, advanced: 1.10 },
+  site: { flat: 1.00, moderate: 1.08, complex: 1.15 },
+  finish: { 0.95: 0.95, 1.00: 1.00, 1.20: 1.20, 1.35: 1.35 },
+  glazingCostPerSF: { 0.10: 110, 0.20: 125, 0.30: 160, 0.40: 200 },
+  basementAdders: { none: [0, 0], partial: [35, 60], full: [55, 95] },
+  options: {
+    // Geothermal removed per request
+    solar: 20000, storage: 18000,
+    rain: 12000, septic: 35000, hydronic: 20000,
+    drivewayPerFt: 80, drivewayMaxFt: 150
+  },
+  rangeLowPct: -0.05, rangeHighPct: 0.07,
+  multipliers: {
+    site: { flat: 1.00, moderate: 1.20, complex: 1.45 },
+    mep: { simple: 0.95, standard: 1.00, advanced: 1.12 }
+  },
+  unitCosts: {
+    // PRE-CONSTRUCTION
+    designDocsPSF: [4, 8],
+    permitsFeesPSF: [2, 4],
+    surveyGeotechLump: [2500, 6000],
+    mobilizationLump: [3000, 9000],
+    // SITE & FOUNDATION (excludes shell)
+    siteworkPSF: [12, 22],
+    utilitiesStubPSF: [6, 12],
+    foundationPSF: [22, 35],
+    // INTERIORS
+    interiorFramingPSF: [14, 22],
+    insulDrywallPSF: [12, 20],
+    flooringFinishesPSF: [18, 35],
+    millworkDoorsPSF: [8, 16],
+    // SYSTEMS (MEP)
+    plumbingPSF: [14, 22],
+    electricalPSF: [14, 22],
+    hvacPSF: [18, 32],
+    specialSystemsPSF: [3, 6],
+    // EXTERIOR (non-glazing)
+    exteriorFinishPSF: [8, 16],
+    // ALLOWANCES
+    kitchenBathPSF: [20, 45],
+    appliancesLump: [6000, 12000],
+    // Dome-specific
+    oculusCurbLumpPerEa: [900, 1600],
+    connectorShellShort: [6000, 11000],
+    connectorShellMed: [12000, 20000],
+    connectorShellLong: [24000, 42000],
+    generatorRentalLump: [900, 1800],        // used if no reliable power on site
+    remoteLogisticsAdderLump: { easy: [0,0], moderate: [1800,3600], remote: [6000,12000] },
+    transitionWaterproofLump: [900, 1800]
+    // Lightning removed
+  },
+  shellThicknessMult: { 4: 1.00, 5: 1.12, 6: 1.25 },
+  mixTypeMult: { std: 1.00, pozz: 1.06, hemp: 1.18 }
+};
+
+function cal(v) { return v * CONFIG.priceCal; }
+
+var lastEstimate = null, lastInputs = null;
+
+/* ---------- Read inputs (added bedrooms + non-conditioned dome fields) ---------- */
+function getInputs() {
+  return {
+    sf: +($('ce_sf')?.value || 0),
+    regionPreset: +($('ce_region')?.value || 1),
+    regionIdx: +($('ce_regionIdx')?.value || 1),
+    finish: +($('ce_finish')?.value || 1),
+    domes: $('ce_domes')?.value || '1',
+    height: $('ce_height')?.value || 'std',
+    glazing: +($('ce_glazing')?.value || 0.2),
+    basement: $('ce_basement')?.value || 'none',
+    site: $('ce_site')?.value || 'flat',
+    mep: $('ce_mep')?.value || 'standard',
+
+    bedrooms: +($('ce_bedrooms')?.value || 0),                // new
+    baths: Math.max(1, +($('ce_baths')?.value || 2)),         // moved to Design/Envelope (assumption; still factors MEP)
+
+    includeSitework: !!$('ce_incSitework')?.checked,
+
+    // Optional systems (geothermal removed)
+    opts: {
+      solar: !!$('ce_optSolar')?.checked,
+      storage: !!$('ce_optStorage')?.checked,
+      rain: !!$('ce_optRain')?.checked,
+      septic: !!$('ce_optSeptic')?.checked,
+      hydronic: !!$('ce_optHydronic')?.checked,
+      driveway: !!$('ce_optDriveway')?.checked
+    },
+
+    drivewayLen: Math.max(0, Math.min(+($('ce_driveLen')?.value || 0), CONFIG.options.drivewayMaxFt)),
+    contPct: (+($('ce_contPct')?.value || 10)) / 100,
+
+    diameter: +($('ce_diameter')?.value || 0),
+    shellThk: +($('ce_shellThk')?.value || 4),
+    mixType: $('ce_mixType')?.value || "std",
+    oculusCount: +($('ce_oculusCount')?.value || 0),
+    connector: $('ce_connector')?.value || "none",
+    remote: $('ce_remote')?.value || "easy",
+
+    // Electricity Already On Site (rename of inflationPower: 'onsite' vs 'generator')
+    inflationPower: $('ce_inflationPower')?.value || "onsite",
+
+    // Non-conditioned dome (garage/utility)
+    ncDomes: +($('ce_ncDomes')?.value || 0),
+    ncSf: +($('ce_ncSf')?.value || 0)
+  };
+}
+
+/* ---------- Bath scaling ---------- */
+function bathFactors(inp) {
+  var expected = Math.max(1, Math.round((inp.sf || 0) / 900));
+  var delta = (inp.baths || expected) - expected;
+  function clamp(x, lo, hi) { return Math.min(hi, Math.max(lo, x)); }
+  var bathPF = clamp(1 + 0.07 * delta, 0.85, 1.25);
+  var bathUF = clamp(1 + 0.03 * delta, 0.90, 1.15);
+  var bathSF = clamp(1 + 0.03 * delta, 0.90, 1.15);
+  return { expected, delta, bathPF, bathUF, bathSF };
+}
+
+/* ---------- Shell calculator (conditioned) ---------- */
+function computeBaseShell(inp, regionFactor) {
+  var shellSurfaceSF = inp.sf * CONFIG.glazingEnvelopeSFPerInteriorSF;
+  var domesMult = CONFIG.domes[inp.domes] || 1;
+  var heightMult = CONFIG.height[inp.height] || 1;
+  var siteStageMult = CONFIG.siteStaging[inp.site] || 1;
+  var m = regionFactor * domesMult * heightMult * siteStageMult;
+
+  var u = CONFIG.shellUnit;
+  function pick(loHi) { return [cal(loHi[0] * m), cal(loHi[1] * m)]; }
+  var air = pick(u.airform_per_shell_sf);
+  var foam = pick(u.foam_per_shell_sf);
+  var shot = pick(u.shotcrete_per_shell_sf);
+  var thicknessMult = CONFIG.shellThicknessMult[inp.shellThk] || 1;
+  var mixMult = CONFIG.mixTypeMult[inp.mixType] || 1;
+  shot = [shot[0] * thicknessMult * mixMult, shot[1] * thicknessMult * mixMult];
+  var reb = pick(u.rebar_per_int_sf);
+  reb = [reb[0] * thicknessMult * mixMult, reb[1] * thicknessMult * mixMult];
+
+  var airCost = [air[0] * shellSurfaceSF, air[1] * shellSurfaceSF];
+  var foamCost = [foam[0] * shellSurfaceSF, foam[1] * shellSurfaceSF];
+  var shotCost = [shot[0] * shellSurfaceSF, shot[1] * shellSurfaceSF];
+  var rebarCost = [reb[0] * inp.sf, reb[1] * inp.sf];
+
+  var low = airCost[0] + foamCost[0] + shotCost[0] + rebarCost[0];
+  var high = airCost[1] + foamCost[1] + shotCost[1] + rebarCost[1];
+  var mid = (low + high) / 2;
+
+  return {
+    shellSurfaceSF,
+    components: {
+      airform: { low: airCost[0], high: airCost[1] },
+      foam: { low: foamCost[0], high: foamCost[1] },
+      shotcrete: { low: shotCost[0], high: shotCost[1] },
+      rebar: { low: rebarCost[0], high: rebarCost[1] }
+    },
+    totalMid: mid
+  };
+}
+
+/* ---------- Shell calculator (non-conditioned dome) ---------- */
+function computeNCshell(ncSf, regionFactor, siteKey, shellThk, mixType) {
+  if (!ncSf) return { totalMid: 0, surfaceSF: 0 };
+  var temp = {
+    sf: ncSf,
+    domes: '1',
+    height: 'std',
+    site: siteKey || 'flat',
+    shellThk: shellThk || 4,
+    mixType: mixType || 'std'
+  };
+  // Use same shell method but with near-zero glazing in costing step
+  var shellSurfaceSF = temp.sf * CONFIG.glazingEnvelopeSFPerInteriorSF;
+  var domesMult = CONFIG.domes[temp.domes] || 1;
+  var heightMult = CONFIG.height[temp.height] || 1;
+  var siteStageMult = CONFIG.siteStaging[temp.site] || 1;
+  var m = regionFactor * domesMult * heightMult * siteStageMult;
+
+  var u = CONFIG.shellUnit;
+  function pick(loHi) { return [cal(loHi[0] * m), cal(loHi[1] * m)]; }
+  var air = pick(u.airform_per_shell_sf);
+  var foam = pick(u.foam_per_shell_sf);
+  var shot = pick(u.shotcrete_per_shell_sf);
+  var thicknessMult = CONFIG.shellThicknessMult[temp.shellThk] || 1;
+  var mixMult = CONFIG.mixTypeMult[temp.mixType] || 1;
+  shot = [shot[0] * thicknessMult * mixMult, shot[1] * thicknessMult * mixMult];
+  var reb = pick(u.rebar_per_int_sf);
+  reb = [reb[0] * thicknessMult * mixMult, reb[1] * thicknessMult * mixMult];
+
+  var airCost = [air[0] * shellSurfaceSF, air[1] * shellSurfaceSF];
+  var foamCost = [foam[0] * shellSurfaceSF, foam[1] * shellSurfaceSF];
+  var shotCost = [shot[0] * shellSurfaceSF, shot[1] * shellSurfaceSF];
+  var rebarCost = [reb[0] * temp.sf, reb[1] * temp.sf];
+
+  var low = airCost[0] + foamCost[0] + shotCost[0] + rebarCost[0];
+  var high = airCost[1] + foamCost[1] + shotCost[1] + rebarCost[1];
+  var mid = (low + high) / 2;
+
+  return { totalMid: mid, surfaceSF: shellSurfaceSF };
+}
+
+/* ---------- Full compute ---------- */
+function compute(inp) {
+  var regionFactor = inp.regionIdx || inp.regionPreset || 1;
+
+  // Base (conditioned) dome shell
+  var shell = computeBaseShell(inp, regionFactor);
+  var structureCost = shell.totalMid;
+
+  // Glazing (conditioned envelope only)
+  var shellSurfaceSF = inp.sf * CONFIG.glazingEnvelopeSFPerInteriorSF;
+  var glazingSF = shellSurfaceSF * inp.glazing;
+  var glazingUnit = CONFIG.glazingCostPerSF[inp.glazing] || 0;
+  var glazingCost = cal(glazingSF * glazingUnit * regionFactor);
+
+  // Basement
+  var adder = CONFIG.basementAdders[inp.basement] || [0, 0];
+  var cov = inp.basement === 'partial' ? 0.5 : (inp.basement === 'full' ? 1 : 0);
+  var basementLow = cal(adder[0] * inp.sf * cov * regionFactor);
+  var basementHigh = cal(adder[1] * inp.sf * cov * regionFactor);
+
+  // Multipliers
+  var siteMultItems = CONFIG.multipliers.site[inp.site] || 1;
+  var mepMultItems = CONFIG.multipliers.mep[inp.mep] || 1;
+  var finishMultItems = CONFIG.finish[inp.finish] || 1;
+  var bf = bathFactors(inp);
+
+  function psf(loHi)      { return [cal(loHi[0] * regionFactor), cal(loHi[1] * regionFactor)]; }
+  function psfSite(loHi)  { var p = psf(loHi); return [p[0] * siteMultItems, p[1] * siteMultItems]; }
+  function psfFinish(loHi){ var p = psf(loHi); return [p[0] * finishMultItems, p[1] * finishMultItems]; }
+  function psfMEP(loHi)   { var p = psf(loHi); return [p[0] * mepMultItems, p[1] * mepMultItems]; }
+  function lump(loHi, m)  { m = m || 1; return [cal(loHi[0] * regionFactor * m), cal(loHi[1] * regionFactor * m)]; }
+
+  var I = CONFIG.unitCosts;
+  var items = [];
+
+  // PRE-CONSTRUCTION
+  var a = psf(I.designDocsPSF);
+  items.push({ cat: "Pre-Construction", name: "Design & Construction Documents", desc: "Full architecture/engineering and coordinated construction drawings", low: a[0] * inp.sf, high: a[1] * inp.sf });
+  var b = psf(I.permitsFeesPSF);
+  items.push({ cat: "Pre-Construction", name: "Permits & Agency Fees", desc: "Plan review, building permit, utility/tap fees where applicable", low: b[0] * inp.sf, high: b[1] * inp.sf });
+  var c = lump(I.surveyGeotechLump, siteMultItems);
+  items.push({ cat: "Pre-Construction", name: "Survey & Geotechnical", desc: "Boundary/topographic survey and geotechnical (soils) report", low: c[0], high: c[1] });
+  var d = lump(I.mobilizationLump, siteMultItems);
+  items.push({ cat: "Pre-Construction", name: "Mobilization", desc: "Staging, temporary power/water, delivery logistics setup", low: d[0], high: d[1] });
+
+  // SITE & FOUNDATION (non-shell)
+  var siteworkPSF = psfSite(I.siteworkPSF);
+  var siteworkLow = inp.includeSitework ? siteworkPSF[0] * inp.sf : 0;
+  var siteworkHigh = inp.includeSitework ? siteworkPSF[1] * inp.sf : 0;
+  items.push({ cat: "Site & Foundation", name: "Sitework & Rough Grading", desc: (inp.includeSitework ? "Clearing, rough grading, temporary access, erosion control" : "Excluded (by owner/others)"), low: siteworkLow, high: siteworkHigh });
+
+  b = psfSite(I.utilitiesStubPSF); b[0] *= bf.bathUF; b[1] *= bf.bathUF;
+  items.push({ cat: "Site & Foundation", name: "Utilities Stub-ins", desc: "Trenching and laterals for water/septic/electric to the shell", low: b[0] * inp.sf, high: b[1] * inp.sf });
+
+  var f = psfSite(I.foundationPSF);
+  items.push({ cat: "Site & Foundation", name: "Foundation / Slab / Footings", desc: "Footings, slab, anchors — basement costs shown separately", low: f[0] * inp.sf, high: f[1] * inp.sf });
+
+  // Remote Logistics / Access (move near beginning under Site & Foundation)
+  var remoteLump = lump(I.remoteLogisticsAdderLump[inp.remote], siteMultItems);
+  items.push({ cat: "Site & Foundation", name: "Remote Logistics / Access", desc: "Access/logistics cost for remote sites (" + inp.remote + ")", low: remoteLump[0], high: remoteLump[1] });
+
+  // Basement explicit
+  items.push({ cat: "Site & Foundation", name: "Basement", desc: inp.basement === 'none' ? 'None (slab only)' : inp.basement === 'partial' ? 'Partial (~50% footprint)' : 'Full (~100% footprint)', low: basementLow, high: basementHigh });
+
+  // CORE STRUCTURE (shell)
+  items.push({ cat: "Core Structure", name: "Base Dome Shell (Airform, Foam, Rebar, Shotcrete)", desc: "Airform membrane, spray foam insulation, rebar, shotcrete structural shell (multipliers: region/domes/height/site)", low: structureCost, high: structureCost });
+
+  if (inp.oculusCount > 0) {
+    var oculus = lump(I.oculusCurbLumpPerEa);
+    items.push({ cat: "Core Structure", name: "Oculus/Skylights Curbs", desc: inp.oculusCount + " unit" + (inp.oculusCount === 1 ? "" : "s"), low: oculus[0] * inp.oculusCount, high: oculus[1] * inp.oculusCount });
+  }
+  if (inp.connector !== "none") {
+    var connectorLump = inp.connector === "short" ? I.connectorShellShort : inp.connector === "med" ? I.connectorShellMed : I.connectorShellLong;
+    var connectorCost = lump(connectorLump);
+    items.push({ cat: "Core Structure", name: "Connector / Tunnel (Shell)", desc: inp.connector.charAt(0).toUpperCase() + inp.connector.slice(1) + " connector", low: connectorCost[0], high: connectorCost[1] });
+  }
+
+  // EXTERIOR
+  a = psfFinish(I.exteriorFinishPSF);
+  items.push({ cat: "Exterior", name: "Exterior Finishes / Coatings", desc: "Membrane topcoat/paint and trims at shell openings", low: a[0] * inp.sf, high: a[1] * inp.sf });
+  var transWp = lump(I.transitionWaterproofLump);
+  items.push({ cat: "Exterior", name: "Transition Waterproofing at Openings", desc: "Waterproofing transitions around openings", low: transWp[0], high: transWp[1] });
+  items.push({ cat: "Exterior", name: "Windows & Glazed Openings", desc: (inp.glazing * 100).toFixed(0) + "% of shell surface @ $" + (CONFIG.glazingCostPerSF[inp.glazing] || 0) + "/SF", low: glazingCost, high: glazingCost });
+
+  // INTERIORS
+  a = psfFinish(I.interiorFramingPSF);
+  items.push({ cat: "Interiors", name: "Interior Framing & Partitions", desc: "Non-structural partitions and basic framing details", low: a[0] * inp.sf, high: a[1] * inp.sf });
+  var ii = psfFinish(I.insulDrywallPSF);
+  items.push({ cat: "Interiors", name: "Insulation & Drywall", desc: "Thermal/sound insulation plus drywall hang, tape and texture", low: ii[0] * inp.sf, high: ii[1] * inp.sf });
+  var ff = psfFinish(I.flooringFinishesPSF);
+  items.push({ cat: "Interiors", name: "Flooring & Interior Finishes", desc: "LVT/tile/carpet, interior paint and finish carpentry", low: ff[0] * inp.sf, high: ff[1] * inp.sf });
+  var mm = psfFinish(I.millworkDoorsPSF);
+  items.push({ cat: "Interiors", name: "Millwork, Interior Doors & Trim", desc: "Interior doors, casing/base, basic built-ins/shelving", low: mm[0] * inp.sf, high: mm[1] * inp.sf });
+
+  // SYSTEMS (MEP) — bathrooms influence plumbing/electrical/special systems only
+  var pl = psfMEP(I.plumbingPSF); pl[0] *= bf.bathPF; pl[1] *= bf.bathPF;
+  items.push({ cat: "Systems (MEP)", name: "Plumbing (rough-in + fixtures)", desc: "Supply/drain/vent, water heater and standard plumbing fixtures", low: pl[0] * inp.sf, high: pl[1] * inp.sf });
+
+  var el = psfMEP(I.electricalPSF); el[0] *= bf.bathPF; el[1] *= bf.bathPF;
+  items.push({ cat: "Systems (MEP)", name: "Electrical (rough-in + devices)", desc: "Service/panels, branch circuits, devices and light fixtures", low: el[0] * inp.sf, high: el[1] * inp.sf });
+
+  var hv = psfMEP(I.hvacPSF);
+  items.push({ cat: "Systems (MEP)", name: "HVAC / Mechanical", desc: "Heat pump/furnace/air handler and distribution (ducted/ductless)", low: hv[0] * inp.sf, high: hv[1] * inp.sf });
+
+  var ss = psfMEP(I.specialSystemsPSF);
+  items.push({ cat: "Systems (MEP)", name: "Special Systems", desc: "ERV/HRV, simple controls and minor low-voltage allowances", low: ss[0] * inp.sf, high: ss[1] * inp.sf });
+
+  // ALLOWANCES
+  var kb = psfFinish(I.kitchenBathPSF);
+  items.push({ cat: "Allowances", name: "Kitchens & Baths Package", desc: "Cabinetry, counters, tile and shower glass finishes", low: kb[0] * inp.sf, high: kb[1] * inp.sf });
+  var app = lump(I.appliancesLump, finishMultItems);
+  items.push({ cat: "Allowances", name: "Appliances", desc: "Typical kitchen + laundry appliance package", low: app[0], high: app[1] });
+
+  // Electricity on site? If not, add generator rental (note: label changed elsewhere)
+  if (inp.inflationPower !== "onsite") {
+    var genRental = lump(I.generatorRentalLump);
+    items.push({ cat: "Site & Foundation", name: "Generator Rental (Airform Inflation)", desc: "No reliable power available; temporary generator for inflation", low: genRental[0], high: genRental[1] });
+  }
+
+  // Optional systems
+  var optLabels = [], optsSum = 0;
+  if (inp.opts.solar)    { optsSum += cal(CONFIG.options.solar   * regionFactor); optLabels.push('Solar PV'); }
+  if (inp.opts.storage)  { optsSum += cal(CONFIG.options.storage * regionFactor); optLabels.push('Battery Storage'); }
+  if (inp.opts.rain)     { optsSum += cal(CONFIG.options.rain    * regionFactor); optLabels.push('Rainwater collection / cistern'); }
+  if (inp.opts.hydronic) { optsSum += cal(CONFIG.options.hydronic* regionFactor); optLabels.push('Hydronic Radiant Floors'); }
+  if (inp.opts.septic)   { optsSum += cal(CONFIG.options.septic  * regionFactor * (CONFIG.site[inp.site] || 1)); optLabels.push('Septic'); }
+  if (inp.opts.driveway && inp.drivewayLen > 0) {
+    var len = Math.min(inp.drivewayLen, CONFIG.options.drivewayMaxFt);
+    var drivewayCost = cal(len * CONFIG.options.drivewayPerFt * regionFactor * (CONFIG.site[inp.site] || 1));
+    optsSum += drivewayCost; optLabels.push("Driveway (~" + len + " ft)");
+  }
+
+  // -------- Non-conditioned dome(s) (garage/utility) --------
+  // Cost: shell + basic foundation/slab, NO interiors/MEP/glazing
+  if (inp.ncDomes > 0 && inp.ncSf > 0) {
+    var nc = computeNCshell(inp.ncSf, regionFactor, inp.site, inp.shellThk, inp.mixType);
+    var nf = psfSite(I.foundationPSF); // slab
+    var ncFoundLow = nf[0] * inp.ncSf, ncFoundHigh = nf[1] * inp.ncSf;
+    var ncShell = { low: nc.totalMid, high: nc.totalMid }; // mid as point
+    items.push({ cat: "Non-Conditioned Domes", name: "Utility/Garage Dome Shell (x" + inp.ncDomes + ")", desc: "Shell only, no interiors/MEP", low: ncShell.low * inp.ncDomes, high: ncShell.high * inp.ncDomes });
+    items.push({ cat: "Non-Conditioned Domes", name: "Utility/Garage Slab/Foundation", desc: "Simple slab foundation", low: ncFoundLow * inp.ncDomes, high: ncFoundHigh * inp.ncDomes });
+  }
+
+  // Totals
+  var preLow  = items.reduce((a, it) => a + it.low, 0);
+  var preHigh = items.reduce((a, it) => a + it.high, 0);
+  var contLow  = preLow  * (inp.contPct || 0);
+  var contHigh = preHigh * (inp.contPct || 0);
+  var low  = (preLow  + contLow  + optsSum) * (1 + CONFIG.rangeLowPct);
+  var high = (preHigh + contHigh + optsSum) * (1 + CONFIG.rangeHighPct);
+
+  return {
+    inp: Object.assign({}, inp, { expectedBaths: bf.expected }),
+    parts: {
+      regionFactor,
+      optsSum, optLabels,
+      shell: shell,
+      sitework: { low: siteworkLow, high: siteworkHigh, included: inp.includeSitework }
+    },
+    items: items,
+    base: { structureCost: structureCost, glazingCost: glazingCost, basementLow: basementLow, basementHigh: basementHigh },
+    totals: {
+      preLow, preHigh, contLow, contHigh,
+      low, high,
+      lowPSF: low / Math.max(inp.sf, 1),
+      highPSF: high / Math.max(inp.sf, 1),
+      structurePSFout: structureCost / Math.max(inp.sf, 1)
+    }
+  };
+}
+
+/* ---------- Render to page (assumptions wording updated) ---------- */
+function render(est) {
+  var inp = est.inp || {};
+  if (!inp.sf) {
+    $('ce_rangeTotal')   && ($('ce_rangeTotal').textContent = "$0 – $0");
+    $('ce_rangePerSf')   && ($('ce_rangePerSf').textContent = "$/SF: $0 – $0");
+    $('ce_baseTotal')    && ($('ce_baseTotal').textContent = "$0");
+    $('ce_basePsf')      && ($('ce_basePsf').textContent = "$/SF: $0");
+    $('ce_siteworkTotal')&& ($('ce_siteworkTotal').textContent = "$0 – $0");
+    $('ce_siteworkNote') && ($('ce_siteworkNote').textContent = "Included");
+    $('ce_assumptions')  && ($('ce_assumptions').textContent = "Region Standard • Standard finish • Typical glazing • Single dome");
+    if ($('ce_breakdown')) $('ce_breakdown').innerHTML =
+      '<tr><td colspan="4" class="_muted" style="text-align:center;padding:18px">Run a calculation to see details.</td></tr>';
+    return;
+  }
+
+  $('ce_rangeTotal') && ($('ce_rangeTotal').textContent = money(est.totals.low) + " – " + money(est.totals.high));
+  $('ce_rangePerSf') && ($('ce_rangePerSf').textContent = "$/SF: " + money(est.totals.lowPSF) + " – " + money(est.totals.highPSF));
+  $('ce_baseTotal')  && ($('ce_baseTotal').textContent  = money(est.base.structureCost));
+  $('ce_basePsf')    && ($('ce_basePsf').textContent    = "$/SF: " + money(est.totals.structurePSFout));
+
+  var sw = est.parts.sitework;
+  $('ce_siteworkTotal') && ($('ce_siteworkTotal').textContent = money(sw.low) + " – " + money(sw.high));
+  $('ce_siteworkNote')  && ($('ce_siteworkNote').textContent  = sw.included ? "Included" : "Excluded");
+
+  var optStr = (est.parts.optLabels && est.parts.optLabels.length) ? (" • Options: " + est.parts.optLabels.join(', ')) : '';
+  var basementStr = inp.basement === 'none' ? 'No basement (slab)' : inp.basement === 'partial' ? 'Partial basement (~50%)' : 'Full basement (~100%)';
+
+  // Electricity on site wording + hint
+  var powerText = (inp.inflationPower === 'onsite') ? 'Yes' : 'No (use generator for Airform inflation)';
+
+  $('ce_assumptions') && ($('ce_assumptions').textContent =
+    "Region " + regionLabel(est.parts.regionFactor) + " (" + est.parts.regionFactor.toFixed(2) + ")" +
+    " • Finish " + finishLabel(+inp.finish || 1) +
+    " • " + ((+inp.glazing || 0) * 100).toFixed(0) + "% glazing" +
+    " • " + inp.domes + " dome" + (inp.domes === '1' ? '' : 's') +
+    " • " + (inp.height === 'tall' ? 'tall shell' : 'std shell') +
+    " • Bedrooms: " + (inp.bedrooms || 0) +
+    " • Bathrooms: " + (inp.baths || 0) +
+    " • " + basementStr +
+    " • " + inp.site + " site" +
+    " • " + (sw.included ? "Sitework included" : "Sitework excluded") +
+    " • " + inp.mep + " MEP" +
+    " • Shell thickness: " + inp.shellThk + " \"" +    // space before inches
+    " • Mix: " + (inp.mixType === 'pozz' ? 'Pozzolan' : (inp.mixType === 'hemp' ? 'Hempcrete' : 'Standard')) +
+    (inp.connector !== "none" ? " • Connector: " + inp.connector : "") +
+    (inp.oculusCount > 0 ? " • Oculus: " + inp.oculusCount : "") +
+    " • Access: " + inp.remote +
+    " • Electricity on site: " + powerText +
+    (inp.ncDomes > 0 && inp.ncSf > 0 ? (" • Non-conditioned dome(s): " + inp.ncDomes + " @ " + inp.ncSf + " SF each") : "") +
+    " • Contingency: " + (inp.contPct * 100).toFixed(1) + "% " +
+    optStr
+  );
+
+  var rows = [], currentCat = null;
+  est.items.forEach(function (it) {
+    if (it.cat !== currentCat) { currentCat = it.cat; rows.push(["— " + currentCat + " —", "", "", ""]); }
+    rows.push([it.name, it.desc, it.low, it.high]);
+  });
+
+  rows.push(["Subtotal (pre contingency)", "All line items above", est.totals.preLow, est.totals.preHigh]);
+  rows.push(["Contingency", (est.inp.contPct * 100).toFixed(1) + "%", est.totals.contLow, est.totals.contHigh]);
+  if (est.parts.optsSum) { rows.push(["Optional systems", est.parts.optLabels.join(' + '), est.parts.optsSum, est.parts.optsSum]); }
+
+  var withContLow  = est.totals.preLow + est.totals.contLow + (est.parts.optsSum || 0);
+  var withContHigh = est.totals.preHigh + est.totals.contHigh + (est.parts.optsSum || 0);
+  var spreadLow  = withContLow  * (-0.05);
+  var spreadHigh = withContHigh * (0.07);
+  rows.push(["Range spread", "-5% / +7%", spreadLow, spreadHigh]);
+  rows.push(["Total (rounded)", "Low / High", est.totals.low, est.totals.high]);
+
+  if ($('ce_breakdown')) {
+    $('ce_breakdown').innerHTML = rows.map(function (r) {
+      var isDivider = (r[0] || "").indexOf("— ") === 0;
+      if (isDivider) return '<tr><td colspan="4" style="background:#f1f5f9;color:#0b1320;font-weight:700">' + r[0] + '</td></tr>';
+      return '<tr><td>' + r[0] + '</td><td class="_muted">' + r[1] + '</td><td class="_right">' + money(r[2]) + '</td><td class="_right">' + money(r[3]) + '</td></tr>';
+    }).join('');
+  }
+}
+
+/* ---------- Fill form from saved inputs ---------- */
+function fillFormFromInputs(inp) {
+  if (!inp) return;
+  function setVal(id, val) { const el = $(id); if (el) el.value = String(val); }
+  function setCheck(id, v) { const el = $(id); if (el) el.checked = !!v; }
+
+  setVal('ce_sf', inp.sf ?? '');
+  setVal('ce_region', inp.regionPreset ?? '1.00');
+  setVal('ce_regionIdx', inp.regionIdx ?? '1.00');
+  setVal('ce_finish', inp.finish ?? '1.00');
+  setVal('ce_domes', inp.domes ?? '1');
+  setVal('ce_height', inp.height ?? 'std');
+  setVal('ce_glazing', inp.glazing ?? '0.20');
+  setVal('ce_basement', inp.basement ?? 'none');
+  setVal('ce_site', inp.site ?? 'flat');
+  setVal('ce_mep', inp.mep ?? 'standard');
+
+  setVal('ce_bedrooms', inp.bedrooms ?? '0');
+  setVal('ce_baths', inp.baths ?? '2');
+
+  setCheck('ce_incSitework', !!inp.includeSitework);
+
+  setCheck('ce_optSolar',   inp?.opts?.solar);
+  setCheck('ce_optStorage', inp?.opts?.storage);
+  setCheck('ce_optRain',    inp?.opts?.rain);
+  setCheck('ce_optSeptic',  inp?.opts?.septic);
+  setCheck('ce_optHydronic',inp?.opts?.hydronic);
+  setCheck('ce_optDriveway',inp?.opts?.driveway);
+
+  setVal('ce_driveLen', inp.drivewayLen ?? 0);
+  setVal('ce_contPct',  (inp.contPct ?? 0.10) * 100);
+
+  setVal('ce_diameter', inp.diameter ?? '');
+  setVal('ce_shellThk', inp.shellThk ?? 4);
+  setVal('ce_mixType',  inp.mixType  ?? 'std');
+  setVal('ce_oculusCount', inp.oculusCount ?? 0);
+  setVal('ce_connector',   inp.connector   ?? 'none');
+  setVal('ce_remote',      inp.remote      ?? 'easy');
+  setVal('ce_inflationPower', inp.inflationPower ?? 'onsite');
+
+  // Non-conditioned dome fields
+  setVal('ce_ncDomes', inp.ncDomes ?? 0);
+  setVal('ce_ncSf',    inp.ncSf    ?? 0);
+
+  updateRegionIdxBadge();
+  updateRangeFill($('ce_regionIdx'));
+  toggleDrivewayInputs();
+}
+
+/* ---------- Slider & small UI helpers (used by wiring later) ---------- */
+function updateRangeFill(el) {
+  if (!el) return;
+  var min = parseFloat(el.min || 0), max = parseFloat(el.max || 100), val = parseFloat(el.value || 0);
+  var pct = ((val - min) / (max - min)) * 100;
+  el.style.setProperty('--fill', pct + '%');
+}
+function applyRegionPreset() {
+  var sel = $('ce_region'); var slider = $('ce_regionIdx');
+  if (sel && slider) { slider.value = sel.value; updateRegionIdxBadge(); updateRangeFill(slider); }
+}
+function updateRegionIdxBadge() {
+  var slider = $('ce_regionIdx'); var badge = $('ce_regionIdxVal');
+  if (slider && badge) badge.textContent = (+slider.value || 1).toFixed(2);
+}
+function toggleDrivewayInputs() {
+  var cb = $('ce_optDriveway'); var len = $('ce_driveLen');
+  if (!len) return;
+  var checked = !!(cb && cb.checked);
+  len.disabled = !checked;
+  len.style.opacity = checked ? '1' : '0.6';
+}
+/* ===== PDF (Part 2/2): jsPDF loader + export + wiring/init ===== */
+
+/* ---------------- jsPDF loader ---------------- */
+function ensureJsPDF() {
+  return new Promise(function (resolve, reject) {
+    var hasCore = !!(window.jspdf && window.jspdf.jsPDF);
+    var hasAT   = !!(window.jspdf && window.jspdf.autoTable);
+    if (hasCore && hasAT) return resolve();
+
+    function load(src) {
+      return new Promise(function (res, rej) {
+        var s = document.createElement('script');
+        s.src = src; s.async = true;
+        s.onload = res; s.onerror = function () { rej(new Error('Failed to load ' + src)); };
+        document.head.appendChild(s);
+      });
+    }
+
+    (hasCore ? Promise.resolve()
+             : load('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'))
+    .then(function () { return hasAT ? Promise.resolve()
+             : load('https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js'); })
+    .then(resolve).catch(reject);
+  });
+}
+
+/* ---------------- PDF helpers ---------------- */
 function drawFooter(doc) {
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
@@ -592,13 +678,14 @@ function drawFooter(doc) {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   doc.setTextColor(110);
+
   const pageNo = doc.getCurrentPageInfo
     ? doc.getCurrentPageInfo().pageNumber
     : doc.internal.getNumberOfPages();
+
   doc.text(
     'Planning-level estimate only. Not a bid. Final costs depend on site, engineering, and trade bids.',
-    margin,
-    y + 14
+    margin, y + 14
   );
   doc.text('Page ' + pageNo, pageW - margin, y + 14, { align: 'right' });
   doc.setTextColor(0);
@@ -617,7 +704,7 @@ function saveOrOpenPDF(doc, filename) {
   setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
 }
 
-/* ===== Cover helpers (navy theme) ===== */
+/* Auto-fitting KPI box text */
 function drawKPI(doc, x, y, w, h, label, value, colors) {
   const r = 10;
   doc.setDrawColor(colors.accent[0], colors.accent[1], colors.accent[2]);
@@ -630,7 +717,7 @@ function drawKPI(doc, x, y, w, h, label, value, colors) {
   doc.setTextColor(colors.accent[0], colors.accent[1], colors.accent[2]);
   doc.text(label.toUpperCase(), x + 14, y + 20);
 
-  // Value (with simple auto-fit)
+  // Value (auto-fit to box)
   const innerW = w - 28;
   let fs = 20;
   const minFs = 10;
@@ -647,6 +734,7 @@ function drawKPI(doc, x, y, w, h, label, value, colors) {
   doc.text(lines, x + 14, y + 48);
 }
 
+/* Build Assumptions table rows (labels improved) */
 function buildAssumptionsRows(inp, est, money0) {
   const sw = est.parts.sitework;
   const swVal = sw.included ? (money0(sw.low) + ' – ' + money0(sw.high)) : 'Excluded';
@@ -656,73 +744,70 @@ function buildAssumptionsRows(inp, est, money0) {
   const mix = inp.mixType === 'pozz' ? 'Pozzolan' : (inp.mixType === 'hemp' ? 'Hempcrete' : 'Standard');
   const height = (inp.height === 'tall' ? 'tall shell' : 'std shell');
 
-  const items = [
+  return [
     ['Region', regionLabel(est.parts.regionFactor) + ' (' + est.parts.regionFactor.toFixed(2) + ')'],
     ['Finish', finishLabel(+inp.finish || 1)],
     ['Glazing', ((+inp.glazing || 0) * 100).toFixed(0) + '%'],
     ['Domes', inp.domes],
     ['Shell Height', height],
+    ['Bedrooms', String(inp.bedrooms || 0)],
+    ['Bathrooms', String(inp.baths || 0)],
     ['Basement', basement],
     ['Site', inp.site],
     ['Sitework', swVal],
     ['MEP', inp.mep],
-    ['Baths', String(inp.baths)],
     ['Shell Thickness', String(inp.shellThk) + ' "'], // space before inches
     ['Mix', mix],
     ...(inp.connector !== 'none' ? [['Connector', inp.connector]] : []),
     ...(inp.oculusCount > 0 ? [['Oculus', String(inp.oculusCount)]] : []),
     ['Access', inp.remote],
     ['Contingency', (inp.contPct * 100).toFixed(1) + '%'],
-    ['Power (on site)', (inp.inflationPower === 'generator' ? 'Generator' : 'Utility')]
+    ['Power (on site)', (inp.inflationPower === 'onsite' ? 'Yes' : 'No — use generator for Airform inflation')],
+    ...(inp.ncDomes > 0 && inp.ncSf > 0 ? [['Non-conditioned domes', inp.ncDomes + ' @ ' + inp.ncSf + ' SF each']] : [])
   ];
-  return items;
 }
 
-/* ===== Export (navy cover + existing breakdown) ===== */
+/* ---------------- Export PDF (cover + breakdown) ---------------- */
 async function exportPDF(inp, est) {
-  // Ensure jsPDF + autoTable are available
   await ensureJsPDF();
   const { jsPDF } = window.jspdf || {};
   if (!jsPDF) throw new Error('jsPDF not available');
 
-  // Colors
   const colors = {
-    navy: [17, 34, 64],         // #112240
-    accent: [38, 86, 138],      // #26568A
+    navy: [17, 34, 64],
+    accent: [38, 86, 138],
     headerBg: [17, 34, 64],
     headerText: [255, 255, 255],
-    kpiBg: [245, 248, 255],     // very light blue
+    kpiBg: [245, 248, 255],
     muted: [110, 110, 110],
     line: [230, 234, 240]
   };
 
-  // Create doc + layout
   const doc = new jsPDF({ unit: 'pt', format: 'letter' });
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 44;
   const maxW = pageW - margin * 2;
 
-  /* ======= COVER PAGE (Navy) ======= */
-  // Header band
+  /* ---- Cover ---- */
   const headerH = 92;
   doc.setFillColor(colors.headerBg[0], colors.headerBg[1], colors.headerBg[2]);
   doc.rect(0, 0, pageW, headerH, 'F');
 
-  // Title (no timestamp to avoid overlap)
+  // Title (timestamp removed to avoid overlap)
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(22);
   doc.setTextColor(colors.headerText[0], colors.headerText[1], colors.headerText[2]);
   doc.text('ICD Cost Estimator™ — Planning Estimate', margin, 56);
 
-  // KPIs row
+  // KPIs
   const kpiY = headerH + 28;
   const kpiH = 86;
   const gap = 18;
   const kpiW = (maxW - gap * 2) / 3;
 
   const rangeText = money0(est.totals.low) + ' – ' + money0(est.totals.high);
-  const psfText = money0(est.totals.lowPSF) + ' – ' + money0(est.totals.highPSF);
-  const baseText = money0(est.base.structureCost) + ' • Base $/SF: ' + money0(est.totals.structurePSFout);
+  const psfText   = money0(est.totals.lowPSF) + ' – ' + money0(est.totals.highPSF);
+  const baseText  = money0(est.base.structureCost) + ' • Base $/SF: ' + money0(est.totals.structurePSFout);
 
   drawKPI(doc, margin + 0*(kpiW + gap), kpiY, kpiW, kpiH, 'Estimated Range', rangeText, colors);
   drawKPI(doc, margin + 1*(kpiW + gap), kpiY, kpiW, kpiH, '$ / SF', psfText, colors);
@@ -739,9 +824,9 @@ async function exportPDF(inp, est) {
   const left  = rows.slice(0, Math.ceil(rows.length / 2));
   const right = rows.slice(Math.ceil(rows.length / 2));
 
-  // Compute card height to fit content
+  // compute card height
   const rowsPerCol = Math.ceil(rows.length / 2);
-  const neededH = 24 /*header*/ + rowsPerCol * rowH + 32 /*bottom pad*/;
+  const neededH = 24 + rowsPerCol * rowH + 32;
   const cardH = Math.max(neededH, 170);
 
   doc.setDrawColor(colors.line[0], colors.line[1], colors.line[2]);
@@ -754,14 +839,14 @@ async function exportPDF(inp, est) {
   doc.setTextColor(colors.navy[0], colors.navy[1], colors.navy[2]);
   doc.text('Assumptions', margin, y);
 
-  // Column painter (add extra spacing after the label’s colon)
+  // Columns
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
 
   function drawAssumptionColumn(arr, x, yy) {
     arr.forEach((pair, i) => {
       const lineY = yy + i * rowH;
-      const label = pair[0] + ':';    // visible colon
+      const label = pair[0] + ':'; // visible colon
       const val = pair[1];
 
       // bullet
@@ -773,7 +858,7 @@ async function exportPDF(inp, est) {
       doc.setFont('helvetica', 'bold');
       doc.text(label, x + 12, lineY);
 
-      // value (measure label + TWO spaces for extra gap)
+      // value (add two spaces after colon for extra separation)
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(60);
       const lblW = doc.getTextWidth(label + '  ');
@@ -786,10 +871,10 @@ async function exportPDF(inp, est) {
   drawAssumptionColumn(left,  margin,                 colY);
   drawAssumptionColumn(right, margin + colW + colGap, colY);
 
-  // (No extra disclaimer text here — footer handles it)
+  // Footer (only once per page; cover uses footer below)
   drawFooter(doc);
 
-  /* ======= BREAKDOWN PAGE ======= */
+  /* ---- Breakdown page ---- */
   doc.addPage();
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
@@ -799,7 +884,6 @@ async function exportPDF(inp, est) {
   const body = [];
   let currentCat = null;
 
-  // Helper: section header row
   function sectionRow(title) {
     return [{
       content: '— ' + title + ' —',
@@ -807,7 +891,6 @@ async function exportPDF(inp, est) {
       styles: { halign: 'left', fillColor: [241, 245, 249], textColor: 20, fontStyle: 'bold' }
     }];
   }
-  // Helper: spacer row between summary lines
   function spacerRow() {
     return [{
       content: ' ',
@@ -816,39 +899,13 @@ async function exportPDF(inp, est) {
     }];
   }
 
-  // Rebuild items, moving Remote Logistics into Site & Foundation
-  const rebuilt = [];
-  let insertedRemote = false;
+  // Emit rows with category headers (Remote Logistics already moved in compute())
   est.items.forEach((it) => {
-    // capture remote logistics item if present and defer placement
-    if (it.cat === 'Site & Foundation' && /Remote Logistics|Access/i.test(it.name)) {
-      // store to insert right after the first Site & Foundation entry
-      rebuilt.push({ __remote: true, item: it });
-      return;
-    }
-    rebuilt.push({ item: it });
-  });
-
-  // Emit rows with category headers; place Remote right after the first Site & Foundation line
-  currentCat = null;
-  let siteFoundationCount = 0;
-  rebuilt.forEach(({ item, __remote }) => {
-    if (!item) return;
-    if (item.cat !== currentCat) {
-      currentCat = item.cat;
+    if (it.cat !== currentCat) {
+      currentCat = it.cat;
       body.push(sectionRow(currentCat));
     }
-    body.push([item.name, item.desc, money0(item.low), money0(item.high)]);
-
-    if (currentCat === 'Site & Foundation') {
-      siteFoundationCount += 1;
-      const idxRemote = rebuilt.find(r => r.__remote);
-      if (idxRemote && !insertedRemote && siteFoundationCount === 1) {
-        const r = idxRemote.item;
-        body.push([r.name, r.desc, money0(r.low), money0(r.high)]);
-        insertedRemote = true;
-      }
-    }
+    body.push([it.name, it.desc, money0(it.low), money0(it.high)]);
   });
 
   // Summary block with spacing
@@ -857,12 +914,10 @@ async function exportPDF(inp, est) {
   body.push(spacerRow());
   body.push(['Contingency', (est.inp.contPct * 100).toFixed(1) + '%', money0(est.totals.contLow), money0(est.totals.contHigh)]);
   body.push(spacerRow());
-
   if (est.parts.optsSum) {
     body.push(['Optional systems', (est.parts.optLabels || []).join(' + '), money0(est.parts.optsSum), money0(est.parts.optsSum)]);
     body.push(spacerRow());
   }
-
   const withContLow  = est.totals.preLow + est.totals.contLow + (est.parts.optsSum || 0);
   const withContHigh = est.totals.preHigh + est.totals.contHigh + (est.parts.optsSum || 0);
   const spreadLow  = withContLow  * (-0.05);
@@ -887,39 +942,19 @@ async function exportPDF(inp, est) {
   saveOrOpenPDF(doc, 'ICD-Estimate-NAVY.pdf');
 }
 
-/* -------------------------------------------------------
-  4) UI Wiring, Sliders, Init, Stripe Return Handling
---------------------------------------------------------*/
-/* Slider helpers */
-function updateRangeFill(el) {
-  if (!el) return;
-  var min = parseFloat(el.min || 0), max = parseFloat(el.max || 100), val = parseFloat(el.value || 0);
-  var pct = ((val - min) / (max - min)) * 100;
-  el.style.setProperty('--fill', pct + '%');
-}
-function applyRegionPreset() {
-  var sel = $('ce_region'); var slider = $('ce_regionIdx');
-  if (sel && slider) { slider.value = sel.value; updateRegionIdxBadge(); updateRangeFill(slider); }
-}
-function updateRegionIdxBadge() {
-  var slider = $('ce_regionIdx'); var badge = $('ce_regionIdxVal');
-  if (slider && badge) badge.textContent = (+slider.value || 1).toFixed(2);
-}
-function toggleDrivewayInputs() {
-  var cb = $('ce_optDriveway'); var len = $('ce_driveLen');
-  if (!len) return;
-  var checked = !!(cb && cb.checked);
-  len.disabled = !checked;
-  len.style.opacity = checked ? '1' : '0.6';
-}
-
-/* Wiring */
-whenReady(['ce_region'], function () { $('ce_region').addEventListener('change', applyRegionPreset); });
+/* ---------------- Wiring ---------------- */
+whenReady(['ce_region'], function () {
+  $('ce_region').addEventListener('change', applyRegionPreset);
+});
 whenReady(['ce_regionIdx','ce_regionIdxVal'], function () {
-  $('ce_regionIdx').addEventListener('input', function (e) { updateRegionIdxBadge(); updateRangeFill(e.target); });
+  $('ce_regionIdx').addEventListener('input', function (e) {
+    updateRegionIdxBadge(); updateRangeFill(e.target);
+  });
   updateRegionIdxBadge(); updateRangeFill($('ce_regionIdx'));
 });
-whenReady(['ce_optDriveway','ce_driveLen'], function () { $('ce_optDriveway').addEventListener('change', toggleDrivewayInputs); });
+whenReady(['ce_optDriveway','ce_driveLen'], function () {
+  $('ce_optDriveway').addEventListener('change', toggleDrivewayInputs);
+});
 
 whenReady(['ce_calcBtn'], function () {
   $('ce_calcBtn').addEventListener('click', function () {
@@ -930,9 +965,14 @@ whenReady(['ce_calcBtn'], function () {
     if (inp && inp.sf > 0) persistInputs(inp);
   });
 });
+
 whenReady(['ce_clearBtn'], function () {
   $('ce_clearBtn').addEventListener('click', function () {
-    ['ce_sf','ce_driveLen'].forEach(function (id) { var el = $(id); if (el) el.value = ""; });
+    // basic fields
+    ['ce_sf','ce_driveLen','ce_diameter','ce_ncDomes','ce_ncSf','ce_bedrooms'].forEach(function (id) {
+      var el = $(id); if (el) el.value = "";
+    });
+
     if ($('ce_region')) { $('ce_region').value = "1.00"; applyRegionPreset(); }
     if ($('ce_finish')) $('ce_finish').value = "1.00";
     if ($('ce_domes')) $('ce_domes').value = "1";
@@ -943,15 +983,18 @@ whenReady(['ce_clearBtn'], function () {
     if ($('ce_mep')) $('ce_mep').value = "standard";
     if ($('ce_baths')) $('ce_baths').value = "2";
     if ($('ce_incSitework')) $('ce_incSitework').checked = true;
-    ['ce_optSolar','ce_optStorage','ce_optGeo','ce_optRain','ce_optSeptic','ce_optHydronic','ce_optDriveway'].forEach(function (id) { var el = $(id); if (el) el.checked = false; });
-    if ($('ce_diameter')) $('ce_diameter').value = "";
+
+    // options (geo + lightning removed)
+    ['ce_optSolar','ce_optStorage','ce_optRain','ce_optSeptic','ce_optHydronic','ce_optDriveway'].forEach(function (id) {
+      var el = $(id); if (el) el.checked = false;
+    });
+
     if ($('ce_shellThk')) $('ce_shellThk').value = "4";
     if ($('ce_mixType')) $('ce_mixType').value = "std";
     if ($('ce_oculusCount')) $('ce_oculusCount').value = "0";
     if ($('ce_connector')) $('ce_connector').value = "none";
     if ($('ce_remote')) $('ce_remote').value = "easy";
     if ($('ce_inflationPower')) $('ce_inflationPower').value = "onsite";
-    if ($('ce_lightning')) $('ce_lightning').checked = false;
     if ($('ce_contPct')) $('ce_contPct').value = "10";
 
     clearInputsStore();
@@ -961,7 +1004,13 @@ whenReady(['ce_clearBtn'], function () {
       base: { structureCost: 0, glazingCost: 0, basementLow: 0, basementHigh: 0 },
       parts: { regionFactor: 1, optsSum: 0, optLabels: [], shell: null, sitework: { low: 0, high: 0, included: true } },
       items: [],
-      inp: { finish: 1, glazing: .2, domes: '1', height: 'std', site: 'flat', mep: 'standard', sf: 0, contPct: 0.10, opts: {}, baths: 2, expectedBaths: 1, drivewayLen: 0, includeSitework: true, basement: 'none', shellThk: 4, mixType: "std", oculusCount: 0, connector: "none", remote: "easy", inflationPower: "onsite", lightning: false }
+      inp: {
+        finish: 1, glazing: .2, domes: '1', height: 'std', site: 'flat', mep: 'standard',
+        sf: 0, contPct: 0.10, opts: {}, baths: 2, bedrooms: 0, expectedBaths: 1,
+        drivewayLen: 0, includeSitework: true, basement: 'none',
+        shellThk: 4, mixType: "std", oculusCount: 0, connector: "none",
+        remote: "easy", inflationPower: "onsite", ncDomes: 0, ncSf: 0
+      }
     };
     lastEstimate = zero; lastInputs = zero.inp;
     render(zero);
@@ -970,6 +1019,7 @@ whenReady(['ce_clearBtn'], function () {
     updateRangeFill($('ce_regionIdx'));
   });
 });
+
 whenReady(['ce_printBtn'], function () {
   $('ce_printBtn').addEventListener('click', async function () {
     var inp = lastInputs || getInputs();
@@ -983,7 +1033,7 @@ whenReady(['ce_printBtn'], function () {
   });
 });
 
-/* Paywall modal wiring */
+/* ---------------- Paywall modal wiring ---------------- */
 whenReady(['pw_payBtn','pw_closeBtn','pw_apply','pw_code','pw_msg'], function (payBtn, closeBtn, applyBtn, codeInput, msg) {
   payBtn.addEventListener('click', gotoCheckout);
   closeBtn.addEventListener('click', closePaywall);
@@ -1003,7 +1053,7 @@ whenReady(['pw_payBtn','pw_closeBtn','pw_apply','pw_code','pw_msg'], function (p
   });
 });
 
-/* Init: restore saved state, render zero or saved, show actions if already paid */
+/* ---------------- Init: restore state and first render ---------------- */
 (function tryRestoreOnLoad() {
   const saved = readInputsFromStore();
   if (saved) {
@@ -1017,18 +1067,25 @@ whenReady(['pw_payBtn','pw_closeBtn','pw_apply','pw_code','pw_msg'], function (p
       base: { structureCost: 0, glazingCost: 0, basementLow: 0, basementHigh: 0 },
       parts: { regionFactor: 1, optsSum: 0, optLabels: [], shell: null, sitework: { low: 0, high: 0, included: true } },
       items: [],
-      inp: { finish: 1, glazing: .2, domes: '1', height: 'std', site: 'flat', mep: 'standard', sf: 0, contPct: 0.10, opts: {}, baths: 2, expectedBaths: 1, drivewayLen: 0, includeSitework: true, basement: 'none', shellThk: 4, mixType: "std", oculusCount: 0, connector: "none", remote: "easy", inflationPower: "onsite", lightning: false }
+      inp: {
+        finish: 1, glazing: .2, domes: '1', height: 'std', site: 'flat', mep: 'standard',
+        sf: 0, contPct: 0.10, opts: {}, baths: 2, bedrooms: 0, expectedBaths: 1,
+        drivewayLen: 0, includeSitework: true, basement: 'none',
+        shellThk: 4, mixType: "std", oculusCount: 0, connector: "none",
+        remote: "easy", inflationPower: "onsite", ncDomes: 0, ncSf: 0
+      }
     });
   }
   if (isPaid()) unhideActions();
 })();
 
+/* First-run UI nits */
 applyRegionPreset();
 toggleDrivewayInputs();
 updateRegionIdxBadge();
 updateRangeFill($('ce_regionIdx'));
 
-/* Stripe return: ?paid=1 or true → mark paid, clean URL, restore inputs, unhide, preload jsPDF, show toast */
+/* ---------------- Stripe return handler ---------------- */
 (function checkPaidReturn() {
   try {
     const usp = new URLSearchParams(window.location.search);
@@ -1052,11 +1109,11 @@ updateRangeFill($('ce_regionIdx'));
       }
 
       unhideActions();
-      ensureJsPDF().catch(() => {}); // warm-up for instant click
+      ensureJsPDF().catch(() => {}); // warm-up
       showUnlockToast();
     }
   } catch (e) {}
 })();
-});
+
 
   
