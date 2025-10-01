@@ -107,7 +107,7 @@ function hideUnlockToast() {
    Estimator Config & Core Logic
 --------------------------------------------------------*/
 var CONFIG = {
-  priceCal: 0.65,
+  priceCal: 0.45,
   glazingEnvelopeSFPerInteriorSF: 0.35,
   shellUnit: {
     airform_per_shell_sf: [12, 18],
