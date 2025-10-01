@@ -107,7 +107,7 @@ function hideUnlockToast() {
    Estimator Config & Core Logic
 --------------------------------------------------------*/
 var CONFIG = {
-  priceCal: 0.93,
+  priceCal: 0.65,
   glazingEnvelopeSFPerInteriorSF: 0.35,
   shellUnit: {
     airform_per_shell_sf: [12, 18],
@@ -1114,6 +1114,7 @@ updateRangeFill($('ce_regionIdx'));
     }
   } catch (e) {}
 })();
+
 
 
   
