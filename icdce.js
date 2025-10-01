@@ -675,12 +675,45 @@ function lockPanel(panel, meta) {
   if (!panel) return;
   panel.classList.add('section--locked');
   ensureOverlay(panel, meta);
+
+  // NEW: hard-disable all interactive controls inside the panel
+  panel.querySelectorAll('input, select, textarea, button').forEach(el => {
+    if (el.closest('.sectionLockOverlay')) return; // don't disable the overlay CTA
+    if (!el.hasAttribute('data-prev-disabled')) el.setAttribute('data-prev-disabled', String(el.disabled));
+    el.disabled = true;
+    el.setAttribute('aria-disabled', 'true');
+  });
 }
+
+function lockPanel(panel, meta) {
+  if (!panel) return;
+  panel.classList.add('section--locked');
+  ensureOverlay(panel, meta);
+
+  // NEW: hard-disable all interactive controls inside the panel
+  panel.querySelectorAll('input, select, textarea, button').forEach(el => {
+    if (el.closest('.sectionLockOverlay')) return; // don't disable the overlay CTA
+    if (!el.hasAttribute('data-prev-disabled')) el.setAttribute('data-prev-disabled', String(el.disabled));
+    el.disabled = true;
+    el.setAttribute('aria-disabled', 'true');
+  });
+}
+
 function unlockPanel(panel) {
   if (!panel) return;
   panel.classList.remove('section--locked');
   const ov = panel.querySelector(':scope > .sectionLockOverlay');
   if (ov) ov.remove();
+
+  // NEW: restore interactivity
+  panel.querySelectorAll('input, select, textarea, button').forEach(el => {
+    if (!el.closest('.sectionLockOverlay')) {
+      const was = el.getAttribute('data-prev-disabled');
+      el.disabled = (was === 'true');
+      el.removeAttribute('data-prev-disabled');
+      el.removeAttribute('aria-disabled');
+    }
+  });
 }
 function maskMoney() {
   const ids = ['ce_rangeTotal','ce_baseTotal','ce_siteworkTotal'];
@@ -1225,6 +1258,7 @@ updateRangeFill($('ce_regionIdx'));
     }
   } catch (e) {}
 })();
+
 
 
 
