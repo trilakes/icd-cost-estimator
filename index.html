@@ -237,6 +237,8 @@
           <label class="_label" for="ce_optDriveway">
             <input type="checkbox" id="ce_optDriveway" /> Driveway
           </label>
+        </div>
+        <div class="_field">
           <div class="_inline" style="gap:8px; align-items:center;">
             <label class="_label" for="ce_driveLen" style="min-width:150px;margin:0;">Length (ft)</label>
             <input id="ce_driveLen" class="_input" style="max-width:160px;" type="number" min="0" step="10" value="0" disabled />
@@ -367,7 +369,7 @@
 </div> <!-- /#icdce -->
 
 <!-- Sticky action bar -->
-<div class="_stickybar" id="icdce_sticky" role="region" aria-label="Quick actions">
+<div class="_stickybar" id="icdce_sticky" role="region" aria-label="Quick actions" aria-hidden="true" style="display:none">
   <button class="_btn _primary" type="button" onclick="document.getElementById('ce_calcBtn')?.click()">Calculate</button>
   <button class="_btn _danger" type="button" onclick="document.getElementById('ce_clearBtn')?.click()">Clear</button>
   <button class="_btn _good" type="button" onclick="document.getElementById('ce_printBtn')?.click()">Export PDF</button>
@@ -396,8 +398,8 @@
 
 <noscript>Please enable JavaScript to use the ICD Cost Estimator.</noscript>
 
-<!-- Main JS -->
-<script src="./icdce.js"></script>
+<!-- Main JS (defer ensures DOM is parsed first; your code also uses whenReady) -->
+<script src="./icdce.js" defer></script>
 
 <!-- Assumptions → grid prettifier (updated to match new wording/fields) -->
 <script>
