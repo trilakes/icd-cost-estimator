@@ -107,7 +107,7 @@ function hideUnlockToast() {
    Estimator Config & Core Logic
 --------------------------------------------------------*/
 var CONFIG = {
-  priceCal: 0.35,
+  priceCal: 0.65,
   glazingEnvelopeSFPerInteriorSF: 0.35,
   shellUnit: {
     airform_per_shell_sf: [12, 18],
@@ -177,7 +177,7 @@ function cal(v) { return v * CONFIG.priceCal; }
 
 var lastEstimate = null, lastInputs = null;
 
-/* ---------- Read inputs (added bedrooms + non-conditioned dome fields) ---------- */
+/* ---------- Read inputs (incl. bedrooms + NC dome fields) ---------- */
 function getInputs() {
   return {
     sf: +($('ce_sf')?.value || 0),
@@ -191,12 +191,12 @@ function getInputs() {
     site: $('ce_site')?.value || 'flat',
     mep: $('ce_mep')?.value || 'standard',
 
-    bedrooms: +($('ce_bedrooms')?.value || 0),                // new
-    baths: Math.max(1, +($('ce_baths')?.value || 2)),         // moved to Design/Envelope (assumption; still factors MEP)
+    bedrooms: +($('ce_bedrooms')?.value || 0),
+    baths: Math.max(1, +($('ce_baths')?.value || 2)),
 
     includeSitework: !!$('ce_incSitework')?.checked,
 
-    // Optional systems (geothermal removed)
+    // Optional systems
     opts: {
       solar: !!$('ce_optSolar')?.checked,
       storage: !!$('ce_optStorage')?.checked,
@@ -216,10 +216,10 @@ function getInputs() {
     connector: $('ce_connector')?.value || "none",
     remote: $('ce_remote')?.value || "easy",
 
-    // Electricity Already On Site (rename of inflationPower: 'onsite' vs 'generator')
+    // Electricity on site (for inflation)
     inflationPower: $('ce_inflationPower')?.value || "onsite",
 
-    // Non-conditioned dome (garage/utility)
+    // Non-conditioned domes
     ncDomes: +($('ce_ncDomes')?.value || 0),
     ncSf: +($('ce_ncSf')?.value || 0)
   };
@@ -287,7 +287,6 @@ function computeNCshell(ncSf, regionFactor, siteKey, shellThk, mixType) {
     shellThk: shellThk || 4,
     mixType: mixType || 'std'
   };
-  // Use same shell method but with near-zero glazing in costing step
   var shellSurfaceSF = temp.sf * CONFIG.glazingEnvelopeSFPerInteriorSF;
   var domesMult = CONFIG.domes[temp.domes] || 1;
   var heightMult = CONFIG.height[temp.height] || 1;
@@ -374,7 +373,7 @@ function compute(inp) {
   var f = psfSite(I.foundationPSF);
   items.push({ cat: "Site & Foundation", name: "Foundation / Slab / Footings", desc: "Footings, slab, anchors — basement costs shown separately", low: f[0] * inp.sf, high: f[1] * inp.sf });
 
-  // Remote Logistics / Access (move near beginning under Site & Foundation)
+  // Remote Logistics / Access
   var remoteLump = lump(I.remoteLogisticsAdderLump[inp.remote], siteMultItems);
   items.push({ cat: "Site & Foundation", name: "Remote Logistics / Access", desc: "Access/logistics cost for remote sites (" + inp.remote + ")", low: remoteLump[0], high: remoteLump[1] });
 
@@ -411,11 +410,11 @@ function compute(inp) {
   var mm = psfFinish(I.millworkDoorsPSF);
   items.push({ cat: "Interiors", name: "Millwork, Interior Doors & Trim", desc: "Interior doors, casing/base, basic built-ins/shelving", low: mm[0] * inp.sf, high: mm[1] * inp.sf });
 
-  // SYSTEMS (MEP) — bathrooms influence plumbing/electrical/special systems only
-  var pl = psfMEP(I.plumbingPSF); pl[0] *= bf.bathPF; pl[1] *= bf.bathPF;
+  // SYSTEMS (MEP)
+  var pl = psfMEP(I.plumbingPSF); pl[0] *= bathFactors(inp).bathPF; pl[1] *= bathFactors(inp).bathPF;
   items.push({ cat: "Systems (MEP)", name: "Plumbing (rough-in + fixtures)", desc: "Supply/drain/vent, water heater and standard plumbing fixtures", low: pl[0] * inp.sf, high: pl[1] * inp.sf });
 
-  var el = psfMEP(I.electricalPSF); el[0] *= bf.bathPF; el[1] *= bf.bathPF;
+  var el = psfMEP(I.electricalPSF); el[0] *= bathFactors(inp).bathPF; el[1] *= bathFactors(inp).bathPF;
   items.push({ cat: "Systems (MEP)", name: "Electrical (rough-in + devices)", desc: "Service/panels, branch circuits, devices and light fixtures", low: el[0] * inp.sf, high: el[1] * inp.sf });
 
   var hv = psfMEP(I.hvacPSF);
@@ -430,7 +429,7 @@ function compute(inp) {
   var app = lump(I.appliancesLump, finishMultItems);
   items.push({ cat: "Allowances", name: "Appliances", desc: "Typical kitchen + laundry appliance package", low: app[0], high: app[1] });
 
-  // Electricity on site? If not, add generator rental (note: label changed elsewhere)
+  // Electricity on site? If not, add generator rental
   if (inp.inflationPower !== "onsite") {
     var genRental = lump(I.generatorRentalLump);
     items.push({ cat: "Site & Foundation", name: "Generator Rental (Airform Inflation)", desc: "No reliable power available; temporary generator for inflation", low: genRental[0], high: genRental[1] });
@@ -449,8 +448,7 @@ function compute(inp) {
     optsSum += drivewayCost; optLabels.push("Driveway (~" + len + " ft)");
   }
 
-  // -------- Non-conditioned dome(s) (garage/utility) --------
-  // Cost: shell + basic foundation/slab, NO interiors/MEP/glazing
+  // Non-conditioned dome(s) (garage/utility): shell + slab only
   if (inp.ncDomes > 0 && inp.ncSf > 0) {
     var nc = computeNCshell(inp.ncSf, regionFactor, inp.site, inp.shellThk, inp.mixType);
     var nf = psfSite(I.foundationPSF); // slab
@@ -465,16 +463,16 @@ function compute(inp) {
   var preHigh = items.reduce((a, it) => a + it.high, 0);
   var contLow  = preLow  * (inp.contPct || 0);
   var contHigh = preHigh * (inp.contPct || 0);
-  var low  = (preLow  + contLow  + optsSum) * (1 + CONFIG.rangeLowPct);
-  var high = (preHigh + contHigh + optsSum) * (1 + CONFIG.rangeHighPct);
+  var low  = (preLow  + contLow  + (optsSum||0)) * (1 + CONFIG.rangeLowPct);
+  var high = (preHigh + contHigh + (optsSum||0)) * (1 + CONFIG.rangeHighPct);
 
   return {
-    inp: Object.assign({}, inp, { expectedBaths: bf.expected }),
+    inp: Object.assign({}, inp, { expectedBaths: bathFactors(inp).expected }),
     parts: {
       regionFactor,
       optsSum, optLabels,
       shell: shell,
-      sitework: { low: siteworkLow, high: siteworkHigh, included: inp.includeSitework }
+      sitework: { low: inp.includeSitework ? siteworkLow : 0, high: inp.includeSitework ? siteworkHigh : 0, included: inp.includeSitework }
     },
     items: items,
     base: { structureCost: structureCost, glazingCost: glazingCost, basementLow: basementLow, basementHigh: basementHigh },
@@ -488,7 +486,7 @@ function compute(inp) {
   };
 }
 
-/* ---------- Render to page (assumptions wording updated) ---------- */
+/* ---------- Render to page ---------- */
 function render(est) {
   var inp = est.inp || {};
   if (!inp.sf) {
@@ -501,6 +499,9 @@ function render(est) {
     $('ce_assumptions')  && ($('ce_assumptions').textContent = "Region Standard • Standard finish • Typical glazing • Single dome");
     if ($('ce_breakdown')) $('ce_breakdown').innerHTML =
       '<tr><td colspan="4" class="_muted" style="text-align:center;padding:18px">Run a calculation to see details.</td></tr>';
+
+    // Apply gates (keeps preview blur/fade even when no inputs)
+    applyGates();
     return;
   }
 
@@ -515,8 +516,6 @@ function render(est) {
 
   var optStr = (est.parts.optLabels && est.parts.optLabels.length) ? (" • Options: " + est.parts.optLabels.join(', ')) : '';
   var basementStr = inp.basement === 'none' ? 'No basement (slab)' : inp.basement === 'partial' ? 'Partial basement (~50%)' : 'Full basement (~100%)';
-
-  // Electricity on site wording + hint
   var powerText = (inp.inflationPower === 'onsite') ? 'Yes' : 'No (use generator for Airform inflation)';
 
   $('ce_assumptions') && ($('ce_assumptions').textContent =
@@ -531,7 +530,7 @@ function render(est) {
     " • " + inp.site + " site" +
     " • " + (sw.included ? "Sitework included" : "Sitework excluded") +
     " • " + inp.mep + " MEP" +
-    " • Shell thickness: " + inp.shellThk + " \"" +    // space before inches
+    " • Shell thickness: " + inp.shellThk + " \"" +
     " • Mix: " + (inp.mixType === 'pozz' ? 'Pozzolan' : (inp.mixType === 'hemp' ? 'Hempcrete' : 'Standard')) +
     (inp.connector !== "none" ? " • Connector: " + inp.connector : "") +
     (inp.oculusCount > 0 ? " • Oculus: " + inp.oculusCount : "") +
@@ -566,6 +565,9 @@ function render(est) {
       return '<tr><td>' + r[0] + '</td><td class="_muted">' + r[1] + '</td><td class="_right">' + money(r[2]) + '</td><td class="_right">' + money(r[3]) + '</td></tr>';
     }).join('');
   }
+
+  // Apply/refresh gating (blur totals, lock sections, teaser table)
+  applyGates();
 }
 
 /* ---------- Fill form from saved inputs ---------- */
@@ -617,7 +619,7 @@ function fillFormFromInputs(inp) {
   toggleDrivewayInputs();
 }
 
-/* ---------- Slider & small UI helpers (used by wiring later) ---------- */
+/* ---------- Slider & small UI helpers ---------- */
 function updateRangeFill(el) {
   if (!el) return;
   var min = parseFloat(el.min || 0), max = parseFloat(el.max || 100), val = parseFloat(el.value || 0);
@@ -638,6 +640,110 @@ function toggleDrivewayInputs() {
   var checked = !!(cb && cb.checked);
   len.disabled = !checked;
   len.style.opacity = checked ? '1' : '0.6';
+}
+
+/* ---------- Gating helpers (lock sections, blur money, teaser table) ---------- */
+function findPanelByAria(label) {
+  const regions = document.querySelectorAll('section[role="region"]');
+  for (const r of regions) {
+    if ((r.getAttribute('aria-label') || '').toLowerCase() === label.toLowerCase()) return r;
+  }
+  return null;
+}
+function ensureOverlay(panel, opts) {
+  if (!panel) return null;
+  let ov = panel.querySelector(':scope > .sectionLockOverlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.className = 'sectionLockOverlay';
+    ov.innerHTML = `
+      <div class="_lockIcon" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M7 10V8a5 5 0 1110 0v2M6 10h12v10H6V10z" stroke="#152038" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="_lockTitle">${opts.title || 'Premium'}</div>
+      <button type="button" class="_lockCTA">${opts.cta || 'Unlock full controls'}</button>
+      <div class="_lockSub">${opts.sub || 'See all design + site options and export a pro PDF'}</div>
+    `;
+    panel.appendChild(ov);
+    ov.querySelector('._lockCTA')?.addEventListener('click', openPaywall);
+  }
+  return ov;
+}
+function lockPanel(panel, meta) {
+  if (!panel) return;
+  panel.classList.add('section--locked');
+  ensureOverlay(panel, meta);
+}
+function unlockPanel(panel) {
+  if (!panel) return;
+  panel.classList.remove('section--locked');
+  const ov = panel.querySelector(':scope > .sectionLockOverlay');
+  if (ov) ov.remove();
+}
+function maskMoney() {
+  const ids = ['ce_rangeTotal','ce_baseTotal','ce_siteworkTotal'];
+  ids.forEach(id => { const el = $(id); if (el) el.classList.add('_moneyMask'); });
+  // Mask line-item numeric cells
+  document.querySelectorAll('section._breakdown td._right').forEach(td => td.classList.add('_moneyMask'));
+}
+function unmaskMoney() {
+  const sel = ['#ce_rangeTotal','#ce_baseTotal','#ce_siteworkTotal','section._breakdown td._right'];
+  document.querySelectorAll(sel.join(',')).forEach(el => el.classList.remove('_moneyMask'));
+}
+function wrapTeaser() {
+  const breakdownPanel = document.querySelector('section._breakdown');
+  if (!breakdownPanel) return;
+  let table = breakdownPanel.querySelector('table');
+  if (!table) return;
+
+  // Already wrapped?
+  if (table.parentElement && table.parentElement.classList.contains('_teaserArea')) return;
+
+  const wrap = document.createElement('div');
+  wrap.className = '_teaserArea';
+  table.parentElement.insertBefore(wrap, table);
+  wrap.appendChild(table);
+
+  // Note + CTA
+  let note = breakdownPanel.querySelector('._teaserNote');
+  if (!note) {
+    note = document.createElement('div');
+    note.className = '_teaserNote';
+    note.innerHTML = `<span>Preview of full line-item detail.</span><button type="button" class="_btn _primary">See full report</button>`;
+    breakdownPanel.appendChild(note);
+    note.querySelector('button')?.addEventListener('click', openPaywall);
+  }
+}
+function unwrapTeaser() {
+  const breakdownPanel = document.querySelector('section._breakdown');
+  if (!breakdownPanel) return;
+  const wrap = breakdownPanel.querySelector('._teaserArea');
+  const note = breakdownPanel.querySelector('._teaserNote');
+  if (wrap) {
+    const table = wrap.querySelector('table');
+    if (table) wrap.parentElement.insertBefore(table, wrap);
+    wrap.remove();
+  }
+  if (note) note.remove();
+}
+function applyGates() {
+  if (isPaid()) {
+    // Fully unlocked
+    ['Design and Envelope','Site and Systems','Other Site Factors'].forEach(lbl => unlockPanel(findPanelByAria(lbl)));
+    // Contingency remains open per your spec — no lock
+    unmaskMoney();
+    unwrapTeaser();
+  } else {
+    // Lock specific panels
+    lockPanel(findPanelByAria('Design and Envelope'), {title:'Premium Controls', cta:'Unlock Design & Envelope'});
+    lockPanel(findPanelByAria('Site and Systems'),   {title:'Premium Controls', cta:'Unlock Site & Systems'});
+    lockPanel(findPanelByAria('Other Site Factors'), {title:'Premium Controls', cta:'Unlock Other Factors'});
+    // Project Basics + Contingency remain unlocked
+    maskMoney();         // blur total $$, keep $/SF readable
+    wrapTeaser();        // show breakdown preview with fade + CTA
+  }
 }
 /* ===== PDF (Part 2/2): jsPDF loader + export + wiring/init ===== */
 
@@ -734,7 +840,7 @@ function drawKPI(doc, x, y, w, h, label, value, colors) {
   doc.text(lines, x + 14, y + 48);
 }
 
-/* Build Assumptions table rows (labels improved) */
+/* Build Assumptions table rows */
 function buildAssumptionsRows(inp, est, money0) {
   const sw = est.parts.sitework;
   const swVal = sw.included ? (money0(sw.low) + ' – ' + money0(sw.high)) : 'Excluded';
@@ -756,7 +862,7 @@ function buildAssumptionsRows(inp, est, money0) {
     ['Site', inp.site],
     ['Sitework', swVal],
     ['MEP', inp.mep],
-    ['Shell Thickness', String(inp.shellThk) + ' "'], // space before inches
+    ['Shell Thickness', String(inp.shellThk) + ' "'],
     ['Mix', mix],
     ...(inp.connector !== 'none' ? [['Connector', inp.connector]] : []),
     ...(inp.oculusCount > 0 ? [['Oculus', String(inp.oculusCount)]] : []),
@@ -793,7 +899,7 @@ async function exportPDF(inp, est) {
   doc.setFillColor(colors.headerBg[0], colors.headerBg[1], colors.headerBg[2]);
   doc.rect(0, 0, pageW, headerH, 'F');
 
-  // Title (timestamp removed to avoid overlap)
+  // Title
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(22);
   doc.setTextColor(colors.headerText[0], colors.headerText[1], colors.headerText[2]);
@@ -823,8 +929,6 @@ async function exportPDF(inp, est) {
   const rows = buildAssumptionsRows(inp, est, money0);
   const left  = rows.slice(0, Math.ceil(rows.length / 2));
   const right = rows.slice(Math.ceil(rows.length / 2));
-
-  // compute card height
   const rowsPerCol = Math.ceil(rows.length / 2);
   const neededH = 24 + rowsPerCol * rowH + 32;
   const cardH = Math.max(neededH, 170);
@@ -846,7 +950,7 @@ async function exportPDF(inp, est) {
   function drawAssumptionColumn(arr, x, yy) {
     arr.forEach((pair, i) => {
       const lineY = yy + i * rowH;
-      const label = pair[0] + ':'; // visible colon
+      const label = pair[0] + ':';
       const val = pair[1];
 
       // bullet
@@ -858,7 +962,7 @@ async function exportPDF(inp, est) {
       doc.setFont('helvetica', 'bold');
       doc.text(label, x + 12, lineY);
 
-      // value (add two spaces after colon for extra separation)
+      // value
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(60);
       const lblW = doc.getTextWidth(label + '  ');
@@ -871,7 +975,6 @@ async function exportPDF(inp, est) {
   drawAssumptionColumn(left,  margin,                 colY);
   drawAssumptionColumn(right, margin + colW + colGap, colY);
 
-  // Footer (only once per page; cover uses footer below)
   drawFooter(doc);
 
   /* ---- Breakdown page ---- */
@@ -899,7 +1002,6 @@ async function exportPDF(inp, est) {
     }];
   }
 
-  // Emit rows with category headers (Remote Logistics already moved in compute())
   est.items.forEach((it) => {
     if (it.cat !== currentCat) {
       currentCat = it.cat;
@@ -908,7 +1010,6 @@ async function exportPDF(inp, est) {
     body.push([it.name, it.desc, money0(it.low), money0(it.high)]);
   });
 
-  // Summary block with spacing
   body.push(spacerRow());
   body.push(['Subtotal (pre contingency)', 'All line items above', money0(est.totals.preLow), money0(est.totals.preHigh)]);
   body.push(spacerRow());
@@ -984,7 +1085,7 @@ whenReady(['ce_clearBtn'], function () {
     if ($('ce_baths')) $('ce_baths').value = "2";
     if ($('ce_incSitework')) $('ce_incSitework').checked = true;
 
-    // options (geo + lightning removed)
+    // options
     ['ce_optSolar','ce_optStorage','ce_optRain','ce_optSeptic','ce_optHydronic','ce_optDriveway'].forEach(function (id) {
       var el = $(id); if (el) el.checked = false;
     });
@@ -1033,6 +1134,13 @@ whenReady(['ce_printBtn'], function () {
   });
 });
 
+/* Sticky toast button → triggers the Export button */
+whenReady(['icdce_unlocked_btn'], function () {
+  $('icdce_unlocked_btn').addEventListener('click', function () {
+    $('ce_printBtn')?.click();
+  });
+});
+
 /* ---------------- Paywall modal wiring ---------------- */
 whenReady(['pw_payBtn','pw_closeBtn','pw_apply','pw_code','pw_msg'], function (payBtn, closeBtn, applyBtn, codeInput, msg) {
   payBtn.addEventListener('click', gotoCheckout);
@@ -1047,6 +1155,7 @@ whenReady(['pw_payBtn','pw_closeBtn','pw_apply','pw_code','pw_msg'], function (p
       unhideActions();
       ensureJsPDF().catch(() => {});
       showUnlockToast();
+      applyGates(); // immediately unlock UI
     } else {
       msg.textContent = "That code didn’t match. Please try again or use checkout.";
     }
@@ -1077,6 +1186,7 @@ whenReady(['pw_payBtn','pw_closeBtn','pw_apply','pw_code','pw_msg'], function (p
     });
   }
   if (isPaid()) unhideActions();
+  applyGates(); // set initial lock/unlock state
 })();
 
 /* First-run UI nits */
@@ -1111,6 +1221,7 @@ updateRangeFill($('ce_regionIdx'));
       unhideActions();
       ensureJsPDF().catch(() => {}); // warm-up
       showUnlockToast();
+      applyGates(); // unlock UI on return
     }
   } catch (e) {}
 })();
