@@ -560,6 +560,25 @@ function ensureJsPDF() {
   });
 }
 
+/* ===== helpers for labels ===== */
+function regionLabel(f) {
+  if (f < 0.90) return 'Low-cost';
+  if (f < 1.10) return 'Standard';
+  if (f < 1.30) return 'High-cost metro';
+  return 'Very high';
+}
+function finishLabel(mult) {
+  // exact map first; fallbacks by threshold
+  if (mult === 0.95) return 'Economy';
+  if (mult === 1.00) return 'Standard';
+  if (mult === 1.20) return 'Premium';
+  if (mult === 1.35) return 'Luxury';
+  if (mult < 0.975) return 'Economy';
+  if (mult < 1.10)  return 'Standard';
+  if (mult < 1.28)  return 'Premium';
+  return 'Luxury';
+}
+
 /* ===== PDF helpers (footer, save/open) ===== */
 function drawFooter(doc) {
   const pageW = doc.internal.pageSize.getWidth();
@@ -611,11 +630,20 @@ function drawKPI(doc, x, y, w, h, label, value, colors) {
   doc.setTextColor(colors.accent[0], colors.accent[1], colors.accent[2]);
   doc.text(label.toUpperCase(), x + 14, y + 20);
 
-  // Value
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(20);
+  // Value (with simple auto-fit)
+  const innerW = w - 28;
+  let fs = 20;
+  const minFs = 10;
+  let lines = [];
+  while (fs >= minFs) {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(fs);
+    lines = doc.splitTextToSize(String(value), innerW);
+    const widest = Math.max.apply(null, lines.map(t => doc.getTextWidth(t)));
+    if (widest <= innerW) break;
+    fs -= 1;
+  }
   doc.setTextColor(colors.navy[0], colors.navy[1], colors.navy[2]);
-  const lines = doc.splitTextToSize(value, w - 28);
   doc.text(lines, x + 14, y + 48);
 }
 
@@ -629,8 +657,8 @@ function buildAssumptionsRows(inp, est, money0) {
   const height = (inp.height === 'tall' ? 'tall shell' : 'std shell');
 
   const items = [
-    ['Region', est.parts.regionFactor.toFixed(2)],
-    ['Finish', (+inp.finish || 1).toFixed(2)],
+    ['Region', regionLabel(est.parts.regionFactor) + ' (' + est.parts.regionFactor.toFixed(2) + ')'],
+    ['Finish', finishLabel(+inp.finish || 1)],
     ['Glazing', ((+inp.glazing || 0) * 100).toFixed(0) + '%'],
     ['Domes', inp.domes],
     ['Shell Height', height],
@@ -639,13 +667,13 @@ function buildAssumptionsRows(inp, est, money0) {
     ['Sitework', swVal],
     ['MEP', inp.mep],
     ['Baths', String(inp.baths)],
-    ['Shell Thickness', inp.shellThk + '"'], // ASCII quote to avoid missing glyphs
+    ['Shell Thickness', String(inp.shellThk) + ' "'], // space before inches
     ['Mix', mix],
     ...(inp.connector !== 'none' ? [['Connector', inp.connector]] : []),
     ...(inp.oculusCount > 0 ? [['Oculus', String(inp.oculusCount)]] : []),
     ['Access', inp.remote],
     ['Contingency', (inp.contPct * 100).toFixed(1) + '%'],
-    ['Inflation Power', (inp.inflationPower === 'generator' ? 'Generator' : 'On-site')]
+    ['Power (on site)', (inp.inflationPower === 'generator' ? 'Generator' : 'Utility')]
   ];
   return items;
 }
@@ -671,7 +699,6 @@ async function exportPDF(inp, est) {
   // Create doc + layout
   const doc = new jsPDF({ unit: 'pt', format: 'letter' });
   const pageW = doc.internal.pageSize.getWidth();
-  const pageH = doc.internal.pageSize.getHeight();
   const margin = 44;
   const maxW = pageW - margin * 2;
 
@@ -681,18 +708,11 @@ async function exportPDF(inp, est) {
   doc.setFillColor(colors.headerBg[0], colors.headerBg[1], colors.headerBg[2]);
   doc.rect(0, 0, pageW, headerH, 'F');
 
-  // Title
+  // Title (no timestamp to avoid overlap)
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(22);
   doc.setTextColor(colors.headerText[0], colors.headerText[1], colors.headerText[2]);
   doc.text('ICD Cost Estimator™ — Planning Estimate', margin, 56);
-
-  // Timestamp (right-side)
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.setTextColor(220);
-  const stamp = 'Generated ' + new Date().toLocaleString();
-  doc.text(stamp, pageW - margin, 56, { align: 'right' });
 
   // KPIs row
   const kpiY = headerH + 28;
@@ -708,7 +728,7 @@ async function exportPDF(inp, est) {
   drawKPI(doc, margin + 1*(kpiW + gap), kpiY, kpiW, kpiH, '$ / SF', psfText, colors);
   drawKPI(doc, margin + 2*(kpiW + gap), kpiY, kpiW, kpiH, 'Base Dome Shell', baseText, colors);
 
-  // Assumptions card (two-column, clean)
+  // Assumptions card
   let y = kpiY + kpiH + 28;
   const cardR = 10;
   const colGap = 28;
@@ -734,14 +754,14 @@ async function exportPDF(inp, est) {
   doc.setTextColor(colors.navy[0], colors.navy[1], colors.navy[2]);
   doc.text('Assumptions', margin, y);
 
-  // Column painter
+  // Column painter (add extra spacing after the label’s colon)
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
 
   function drawAssumptionColumn(arr, x, yy) {
     arr.forEach((pair, i) => {
       const lineY = yy + i * rowH;
-      const label = pair[0] + ':';
+      const label = pair[0] + ':';    // visible colon
       const val = pair[1];
 
       // bullet
@@ -753,10 +773,10 @@ async function exportPDF(inp, est) {
       doc.setFont('helvetica', 'bold');
       doc.text(label, x + 12, lineY);
 
-      // value
+      // value (measure label + TWO spaces for extra gap)
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(60);
-      const lblW = doc.getTextWidth(label + ' ');
+      const lblW = doc.getTextWidth(label + '  ');
       const wrap = doc.splitTextToSize(String(val), colW - 12 - lblW);
       doc.text(wrap, x + 12 + lblW, lineY);
     });
@@ -766,15 +786,10 @@ async function exportPDF(inp, est) {
   drawAssumptionColumn(left,  margin,                 colY);
   drawAssumptionColumn(right, margin + colW + colGap, colY);
 
-  // fine print at bottom of cover
-  doc.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text('Planning-level estimate only. Not a bid. Final costs depend on site, engineering, and trade bids.', margin, pageH - 48);
-
+  // (No extra disclaimer text here — footer handles it)
   drawFooter(doc);
 
-  /* ======= BREAKDOWN PAGE (unchanged style) ======= */
+  /* ======= BREAKDOWN PAGE ======= */
   doc.addPage();
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
@@ -783,22 +798,69 @@ async function exportPDF(inp, est) {
 
   const body = [];
   let currentCat = null;
+
+  // Helper: section header row
+  function sectionRow(title) {
+    return [{
+      content: '— ' + title + ' —',
+      colSpan: 4,
+      styles: { halign: 'left', fillColor: [241, 245, 249], textColor: 20, fontStyle: 'bold' }
+    }];
+  }
+  // Helper: spacer row between summary lines
+  function spacerRow() {
+    return [{
+      content: ' ',
+      colSpan: 4,
+      styles: { halign: 'left', fillColor: [255, 255, 255], textColor: 255 }
+    }];
+  }
+
+  // Rebuild items, moving Remote Logistics into Site & Foundation
+  const rebuilt = [];
+  let insertedRemote = false;
   est.items.forEach((it) => {
-    if (it.cat !== currentCat) {
-      currentCat = it.cat;
-      body.push([{
-        content: '— ' + currentCat + ' —',
-        colSpan: 4,
-        styles: { halign: 'left', fillColor: [241, 245, 249], textColor: 20, fontStyle: 'bold' }
-      }]);
+    // capture remote logistics item if present and defer placement
+    if (it.cat === 'Site & Foundation' && /Remote Logistics|Access/i.test(it.name)) {
+      // store to insert right after the first Site & Foundation entry
+      rebuilt.push({ __remote: true, item: it });
+      return;
     }
-    body.push([it.name, it.desc, money0(it.low), money0(it.high)]);
+    rebuilt.push({ item: it });
   });
 
+  // Emit rows with category headers; place Remote right after the first Site & Foundation line
+  currentCat = null;
+  let siteFoundationCount = 0;
+  rebuilt.forEach(({ item, __remote }) => {
+    if (!item) return;
+    if (item.cat !== currentCat) {
+      currentCat = item.cat;
+      body.push(sectionRow(currentCat));
+    }
+    body.push([item.name, item.desc, money0(item.low), money0(item.high)]);
+
+    if (currentCat === 'Site & Foundation') {
+      siteFoundationCount += 1;
+      const idxRemote = rebuilt.find(r => r.__remote);
+      if (idxRemote && !insertedRemote && siteFoundationCount === 1) {
+        const r = idxRemote.item;
+        body.push([r.name, r.desc, money0(r.low), money0(r.high)]);
+        insertedRemote = true;
+      }
+    }
+  });
+
+  // Summary block with spacing
+  body.push(spacerRow());
   body.push(['Subtotal (pre contingency)', 'All line items above', money0(est.totals.preLow), money0(est.totals.preHigh)]);
+  body.push(spacerRow());
   body.push(['Contingency', (est.inp.contPct * 100).toFixed(1) + '%', money0(est.totals.contLow), money0(est.totals.contHigh)]);
+  body.push(spacerRow());
+
   if (est.parts.optsSum) {
     body.push(['Optional systems', (est.parts.optLabels || []).join(' + '), money0(est.parts.optsSum), money0(est.parts.optsSum)]);
+    body.push(spacerRow());
   }
 
   const withContLow  = est.totals.preLow + est.totals.contLow + (est.parts.optsSum || 0);
@@ -806,6 +868,7 @@ async function exportPDF(inp, est) {
   const spreadLow  = withContLow  * (-0.05);
   const spreadHigh = withContHigh * (0.07);
   body.push(['Range spread', '-5% / +7%', money0(spreadLow), money0(spreadHigh)]);
+  body.push(spacerRow());
   body.push(['Total (rounded)', 'Low / High', money0(est.totals.low), money0(est.totals.high)]);
 
   doc.autoTable({
@@ -823,7 +886,6 @@ async function exportPDF(inp, est) {
 
   saveOrOpenPDF(doc, 'ICD-Estimate-NAVY.pdf');
 }
-
 
 /* -------------------------------------------------------
   4) UI Wiring, Sliders, Init, Stripe Return Handling
