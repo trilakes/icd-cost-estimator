@@ -1,4 +1,4 @@
-/* ===== ICD Cost Estimator — Sleek Glass Pro (Dark Accents) ===== */
+/* ===== ICD Cost Estimator — Sleek Glass Pro (Dark Accents + Gating) ===== */
 
 /* ---------- Theme Tokens ---------- */
 :root{
@@ -24,28 +24,28 @@
 
   /* Cards / Sections */
   --panel-bg: rgba(255,255,255,0.78);
-  --panel-stroke:#8aa0bf;        /* darker border to pop */
-  --panel-stroke-strong:#6c7fa1; /* for emphasis borders */
+  --panel-stroke:#8aa0bf;
+  --panel-stroke-strong:#6c7fa1;
 
-  /* Buttons (darker, more serious) */
-  --calc:#1c3aa9;   /* cobalt/indigo */
+  /* Buttons */
+  --calc:#1c3aa9;
   --calc-2:#112a86;
-  --danger:#b01717; /* darker red */
+  --danger:#b01717;
   --danger-2:#8f1313;
-  --success:#14823a;/* restrained green */
+  --success:#14823a;
   --success-2:#0f6b2f;
 
   /* Inputs */
   --input-bg:#ffffff;
-  --input-border:#b8c7de;        /* darker than before */
+  --input-border:#b8c7de;
   --input-border-2:#aebfd9;
   --input-focus:#1c3aa9;
   --ring: rgba(28,58,169,0.28);
 
   /* Tables */
-  --thead-bg:#d6e0f3;            /* darker header for contrast */
+  --thead-bg:#d6e0f3;
   --thead-border:#b4c3df;
-  --cat-bg:#c7d6f2;              /* category rows darker */
+  --cat-bg:#c7d6f2;
   --cat-border:#98afd5;
   --row-alt:#f7faff;
   --money:#0b1222;
@@ -54,6 +54,11 @@
   --shadow-1: 0 12px 28px rgba(10,16,28,0.10);
   --shadow-2: 0 18px 44px rgba(10,16,28,0.16);
   --shadow-inset: inset 0 1px 0 rgba(255,255,255,0.85);
+
+  /* Gating accents */
+  --gate-dim: rgba(10,16,28,0.12);
+  --gate-dim-strong: rgba(10,16,28,0.18);
+  --fade-mask: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,1) 72%);
 }
 @supports(backdrop-filter: blur(12px)){
   :root{
@@ -70,7 +75,6 @@ html, body{
   font-family: Inter, "SF Pro Text", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
   -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
   line-height:1.5;
-
   background:
     radial-gradient(1100px 700px at 100% 0%, rgba(17,42,134,0.12), transparent 60%),
     radial-gradient(900px 600px at 0% 100%, rgba(20,130,58,0.08), transparent 60%),
@@ -78,10 +82,9 @@ html, body{
 }
 a{ color:var(--calc); text-decoration:none; }
 a:hover{ text-decoration:underline; }
-
 #icdce{ max-width:1120px; margin:0 auto; padding:20px 18px 120px; }
 
-/* ---------- Brand Bar (deep navy) ---------- */
+/* ---------- Brand Bar ---------- */
 ._brandbar{
   display:flex; align-items:center; justify-content:space-between;
   background: linear-gradient(180deg, var(--brand-a), var(--brand-b));
@@ -102,7 +105,7 @@ a:hover{ text-decoration:underline; }
   padding:6px 10px; font-size:12px; border-radius:999px;
 }
 
-/* ---------- Panels / Sections (glassy with darker borders) ---------- */
+/* ---------- Panels / Sections ---------- */
 ._panel{
   background: linear-gradient(180deg, var(--panel-bg), var(--glass));
   border: 1.5px solid var(--panel-stroke);
@@ -117,7 +120,6 @@ a:hover{ text-decoration:underline; }
   content:""; position:absolute; inset:0; pointer-events:none;
   background: linear-gradient(0deg, transparent, var(--glass-tint));
 }
-
 ._section{ margin-bottom:18px; }
 ._sectionTitle{
   font-size:18px; font-weight:900; margin:0 0 12px;
@@ -128,7 +130,6 @@ a:hover{ text-decoration:underline; }
 ._sectionSubtitle{
   font-size:14px; font-weight:900; margin:12px 0 8px; color:var(--text-strong);
 }
-
 ._grid{ display:grid; grid-template-columns: repeat(auto-fit, minmax(240px,1fr)); gap:12px; }
 ._inline{ display:flex; align-items:center; gap:10px; }
 ._inline-stack{ display:flex; flex-wrap:wrap; gap:12px; }
@@ -138,12 +139,11 @@ a:hover{ text-decoration:underline; }
 /* ---------- Fields & Inputs ---------- */
 ._label{ display:block; font-size:13px; font-weight:800; color:var(--text-strong); margin-bottom:6px; }
 ._hint{ margin-top:6px; font-size:12px; color:var(--muted-2); }
-
 ._input{
   width:100%;
   background: var(--input-bg);
   color: var(--text);
-  border: 1.4px solid var(--input-border);      /* clearer outlines */
+  border: 1.4px solid var(--input-border);
   border-radius: 10px;
   padding: 10px 12px;
   outline: none;
@@ -155,7 +155,6 @@ a:hover{ text-decoration:underline; }
   border-color: var(--input-focus);
   box-shadow: 0 0 0 3px var(--ring), var(--shadow-inset);
 }
-
 select._input{
   appearance:none; -webkit-appearance:none; -moz-appearance:none;
   background:
@@ -165,17 +164,14 @@ select._input{
   padding-right: 36px;
   color-scheme: light;
 }
-select._input option{
-  color: var(--text);
-  background: #ffffff;
-}
+select._input option{ color: var(--text); background: #ffffff; }
 
 /* Number inputs: remove spinners */
 input[type=number]._input::-webkit-outer-spin-button,
 input[type=number]._input::-webkit-inner-spin-button{ -webkit-appearance: none; margin: 0; }
 input[type=number]._input{ -moz-appearance: textfield; }
 
-/* ---------- Range Slider (keep colored fill) ---------- */
+/* Range slider */
 input[type=range]._input{
   appearance:none; -webkit-appearance:none;
   height: 8px; padding:0;
@@ -202,7 +198,7 @@ input[type=range]._input::-moz-range-thumb{
 }
 ._ticks{ display:flex; justify-content:space-between; font-size:11px; color:#637598; margin-top:6px; }
 
-/* ---------- Buttons (sleek, darker) ---------- */
+/* ---------- Buttons ---------- */
 ._btn{
   display:inline-flex; align-items:center; justify-content:center; gap:8px;
   font-size:14px; font-weight:900; letter-spacing:.2px;
@@ -219,45 +215,14 @@ input[type=range]._input::-moz-range-thumb{
 ._btn:active{ transform: translateY(0); }
 ._btn:focus-visible{ outline:none; box-shadow: 0 0 0 3px var(--ring), var(--shadow-1); }
 
-/* Calculate — darker cobalt */
-._btn._primary,
-#ce_calcBtn,
-#icdce_sticky button:first-child{
-  background: linear-gradient(180deg, var(--calc), var(--calc-2));
-  color:#ffffff;
-  border-color: rgba(10,16,28,0.28);
-}
-._btn._primary:hover,
-#ce_calcBtn:hover,
-#icdce_sticky button:first-child:hover{ filter: brightness(1.06); }
-
-/* Clear — darker red */
-._btn._danger,
-#ce_clearBtn,
-#icdce_sticky button:nth-child(2){
-  background: linear-gradient(180deg, var(--danger), var(--danger-2));
-  color:#ffffff;
-  border-color: rgba(10,16,28,0.28);
-}
-._btn._danger:hover,
-#ce_clearBtn:hover,
-#icdce_sticky button:nth-child(2):hover{ filter: brightness(1.06); }
-
-/* Export — subtle green */
-._btn._good,
-#icdce_sticky button:nth-child(3){
-  background: linear-gradient(180deg, var(--success), var(--success-2));
-  color:#eafff0;
-  border-color: rgba(10,16,28,0.28);
-}
-._btn._good:hover,
-#icdce_sticky button:nth-child(3):hover{ filter: brightness(1.05); }
-
-/* Secondary */
-._btn._secondary{
-  background: linear-gradient(180deg, #ffffff, #f3f6ff);
-  color: var(--text);
-}
+/* Variants */
+._btn._primary{ background: linear-gradient(180deg, var(--calc), var(--calc-2)); color:#ffffff; border-color: rgba(10,16,28,0.28); }
+._btn._danger{ background: linear-gradient(180deg, var(--danger), var(--danger-2)); color:#ffffff; border-color: rgba(10,16,28,0.28); }
+._btn._good{ background: linear-gradient(180deg, var(--success), var(--success-2)); color:#eafff0; border-color: rgba(10,16,28,0.28); }
+._btn._primary:hover{ filter: brightness(1.06); }
+._btn._danger:hover{ filter: brightness(1.06); }
+._btn._good:hover{ filter: brightness(1.05); }
+._btn._secondary{ background: linear-gradient(180deg, #ffffff, #f3f6ff); color: var(--text); }
 
 /* ---------- Summary Cards ---------- */
 ._cards{ display:grid; grid-template-columns: repeat(auto-fit,minmax(240px,1fr)); gap:12px; }
@@ -270,17 +235,15 @@ input[type=range]._input::-moz-range-thumb{
   backdrop-filter: blur(8px) saturate(130%);
 }
 ._card h3{ margin:0 0 8px; font-size:14px; font-weight:900; color:var(--text-strong); }
-
-/* Numbers: clean + “normal” weight; tabular for alignment */
 ._big{
-  font-size:22px; font-weight:700;   /* not ultra-bold; professional */
+  font-size:22px; font-weight:700;
   color:var(--money);
   font-variant-numeric: lining-nums tabular-nums;
   font-feature-settings: "lnum" 1, "tnum" 1;
 }
 ._small{ font-size:13px; color:var(--muted); }
 
-/* ---------- Assumptions (chips, tidy) ---------- */
+/* ---------- Assumptions (chips) ---------- */
 #ce_assumptions_grid ._section{ margin-bottom:14px; }
 #ce_assumptions_grid ._sectionSubtitle{
   font-size:13px; font-weight:900; color:var(--text-strong); margin-bottom:8px;
@@ -303,7 +266,7 @@ input[type=range]._input::-moz-range-thumb{
   background:#e8efff; border-color:#cad9ff; color:#0b1222;
 }
 
-/* ---------- Breakdown Table (darker, crisper) ---------- */
+/* ---------- Breakdown Table ---------- */
 ._breakdown table{
   width:100%;
   border-collapse: collapse;
@@ -337,7 +300,6 @@ input[type=range]._input::-moz-range-thumb{
   border-bottom: 1px solid var(--cat-border);
   font-size:12.5px;
 }
-
 ._breakdown td._right{
   text-align:right; color:var(--money); font-weight:800;
 }
@@ -345,7 +307,7 @@ input[type=range]._input::-moz-range-thumb{
 /* ---------- Disclaimer ---------- */
 ._disclaimer{ margin-top:10px; font-size:12px; color:var(--muted); }
 
-/* ---------- Sticky Action Bar (glassy blue) ---------- */
+/* ---------- Sticky Action Bar ---------- */
 ._stickybar{
   position:fixed; left:0; right:0; bottom:0;
   display:flex; justify-content:center; gap:12px;
@@ -405,14 +367,12 @@ label > input[type="checkbox"]{
   ._brandbar{ flex-direction: column; align-items:flex-start; gap: 8px; }
 }
 
-/* ======== Additions for new fields / flows (NON-BREAKING) ======== */
+/* ======== GATING / LOCKING ADDITIONS ======== */
 
 /* Show modal when aria-hidden="false" is toggled by JS */
-._modalBackdrop[aria-hidden="false"]{
-  display:flex;
-}
+._modalBackdrop[aria-hidden="false"]{ display:flex; }
 
-/* Disabled inputs: soft dim for clarity */
+/* Disabled inputs visual */
 ._input:disabled{
   background:#f1f5fb;
   color:#6b7a94;
@@ -423,20 +383,114 @@ label > input[type="checkbox"]{
 /* Compact widths for small numeric inputs */
 #ce_driveLen{ max-width:160px; }
 #ce_ncDomes, #ce_ncSf{ max-width:180px; }
-
-/* Badge for region index value (keeps your badge style but ensures good spacing) */
 #ce_regionIdxVal._badge{ margin-left:4px; }
-
-/* Ensure datalist tick row wraps nicely on narrow screens */
 ._ticks span{ min-width: 34px; text-align:center; }
 
-/* Make assumption pills look good even if JS injects longer values */
+/* Assumption badges clipping */
 #ce_assumptions_grid ._badge{
   display:inline-block;
   max-width:100%;
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
+}
+
+/* -------- Section Locking (whole panels) -------- */
+.section--locked{
+  filter: blur(5px) saturate(0.9);
+  opacity: 0.85;
+  pointer-events: none;    /* block interaction with the underlying panel */
+}
+
+/* Overlay shown while section is locked (clickable CTA) */
+.sectionLockOverlay{
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center; flex-direction:column;
+  gap:10px;
+  background: linear-gradient(180deg, var(--gate-dim), var(--gate-dim-strong));
+  backdrop-filter: blur(3px) saturate(120%);
+  border-radius: 16px;
+  z-index: 2;
+  pointer-events:auto;  /* overlay can be clicked */
+}
+.sectionLockOverlay ._lockIcon{
+  width:44px; height:44px; border-radius:999px;
+  display:grid; place-items:center;
+  background:#ffffff; border:1px solid rgba(10,16,28,0.12);
+  box-shadow: var(--shadow-1);
+}
+.sectionLockOverlay ._lockTitle{
+  color:#0a1324; font-weight:900; font-size:14px; background:#ffffff;
+  padding:6px 12px; border-radius:999px; border:1px solid rgba(10,16,28,0.12);
+  box-shadow: var(--shadow-1);
+}
+.sectionLockOverlay ._lockCTA{
+  background: linear-gradient(180deg, var(--success), var(--success-2));
+  color:#eafff0; font-weight:900; font-size:13px;
+  padding:8px 14px; border-radius:12px;
+  border:1px solid rgba(255,255,255,0.3); cursor:pointer;
+}
+.sectionLockOverlay ._lockCTA:hover{ filter:brightness(1.06); }
+.sectionLockOverlay ._lockCTA:active{ transform: translateY(1px); }
+.sectionLockOverlay ._lockSub{
+  font-size:12px; color:#0a1324; opacity:.85; text-align:center;
+}
+
+/* -------- Price Gate (mask overall dollars) -------- */
+._moneyMask{ filter:blur(4px); pointer-events:none; user-select:none; }
+._breakdown td._right._moneyMask{ filter:blur(3px); }
+
+/* Optional masked-number wrapper CTA (if added in DOM) */
+._moneyWrap{ position:relative; }
+._moneyMaskOverlay{
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+  background: linear-gradient(180deg, rgba(10,16,28,0.04), rgba(10,16,28,0.10));
+  border-radius:10px; cursor:pointer;
+}
+._moneyMaskCTA{
+  padding:6px 12px; border-radius:10px;
+  background: linear-gradient(180deg, var(--success), var(--success-2));
+  color:#ffffff; font-weight:900; font-size:12px; border:1px solid rgba(255,255,255,0.25);
+  box-shadow: var(--shadow-1);
+}
+
+/* -------- Breakdown Teaser (preview + fade) -------- */
+._teaserArea{
+  position:relative;
+  max-height: 360px;
+  overflow: hidden;
+  border-radius:12px;
+}
+._teaserArea::after{
+  content:"";
+  position:absolute; left:0; right:0; bottom:0; height:120px;
+  background: var(--fade-mask);
+  pointer-events:none;
+}
+._teaserArea.--open{ max-height:none; }
+
+._teaserNote{
+  display:flex; justify-content:center; gap:8px; align-items:center;
+  margin-top:8px; font-size:12px; color:var(--muted);
+}
+._teaserNote ._btn{ padding:6px 12px; font-size:12px; }
+
+/* -------- Gate utility modifiers -------- */
+._priceOnlyCard ._big._moneyMask + ._small{ opacity:1; }
+
+/* Optional: "Premium" badge for locked cards */
+._premiumBadge{
+  position:absolute; top:10px; right:10px;
+  font-size:11px; font-weight:900; color:#0a1324;
+  background:#ffffff; border:1px solid rgba(10,16,28,0.12);
+  border-radius:999px; padding:4px 8px; box-shadow: var(--shadow-1);
+}
+
+/* -------- Accessibility helpers -------- */
+.sr-only{
+  position:absolute !important; width:1px !important; height:1px !important;
+  padding:0 !important; margin:-1px !important; overflow:hidden !important;
+  clip:rect(0,0,0,0) !important; white-space:nowrap !important; border:0 !important;
 }
 
 
