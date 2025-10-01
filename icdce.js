@@ -650,50 +650,43 @@ function findPanelByAria(label) {
   }
   return null;
 }
+/* ---------- New minimal "ribbon" instead of full overlay ---------- */
 function ensureOverlay(panel, opts) {
+  // Reuse name but make it a small ribbon, not a full overlay
   if (!panel) return null;
-  let ov = panel.querySelector(':scope > .sectionLockOverlay');
-  if (!ov) {
-    ov = document.createElement('div');
-    ov.className = 'sectionLockOverlay';
-    ov.innerHTML = `
-      <div class="_lockIcon" aria-hidden="true">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-          <path d="M7 10V8a5 5 0 1110 0v2M6 10h12v10H6V10z" stroke="#152038" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
+  let rib = panel.querySelector(':scope > .sectionLockRibbon');
+  if (!rib) {
+    rib = document.createElement('div');
+    rib.className = 'sectionLockRibbon';
+    rib.innerHTML = `
+      <div class="_rWrap">
+        <div class="_rTitle">${(opts && opts.title) || 'Premium Controls'}</div>
+        <button type="button" class="_rCTA">${(opts && opts.cta) || 'Unlock'}</button>
       </div>
-      <div class="_lockTitle">${opts.title || 'Premium'}</div>
-      <button type="button" class="_lockCTA">${opts.cta || 'Unlock full controls'}</button>
-      <div class="_lockSub">${opts.sub || 'See all design + site options and export a pro PDF'}</div>
+      <div class="_rSub">${(opts && opts.sub) || 'See all design + site options and export a pro PDF'}</div>
     `;
-    panel.appendChild(ov);
-    ov.querySelector('._lockCTA')?.addEventListener('click', openPaywall);
+    panel.appendChild(rib);
+    rib.querySelector('._rCTA')?.addEventListener('click', openPaywall);
   }
-  return ov;
+  return rib;
 }
+
+/* ---------- Lock/Unlock now disable individual controls ---------- */
 function lockPanel(panel, meta) {
   if (!panel) return;
   panel.classList.add('section--locked');
   ensureOverlay(panel, meta);
 
-  // NEW: hard-disable all interactive controls inside the panel
-  panel.querySelectorAll('input, select, textarea, button').forEach(el => {
-    if (el.closest('.sectionLockOverlay')) return; // don't disable the overlay CTA
-    if (!el.hasAttribute('data-prev-disabled')) el.setAttribute('data-prev-disabled', String(el.disabled));
-    el.disabled = true;
-    el.setAttribute('aria-disabled', 'true');
-  });
-}
+  // Disable all form controls inside this panel (but not the ribbon button)
+  const ctrls = panel.querySelectorAll('input, select, textarea, button');
+  ctrls.forEach(el => {
+    // Don’t disable our ribbon CTA
+    if (el.closest('.sectionLockRibbon')) return;
 
-function lockPanel(panel, meta) {
-  if (!panel) return;
-  panel.classList.add('section--locked');
-  ensureOverlay(panel, meta);
-
-  // NEW: hard-disable all interactive controls inside the panel
-  panel.querySelectorAll('input, select, textarea, button').forEach(el => {
-    if (el.closest('.sectionLockOverlay')) return; // don't disable the overlay CTA
-    if (!el.hasAttribute('data-prev-disabled')) el.setAttribute('data-prev-disabled', String(el.disabled));
+    // Remember prior state so we can restore precisely
+    if (!el.hasAttribute('data-prev-disabled')) {
+      el.setAttribute('data-prev-disabled', el.disabled ? '1' : '0');
+    }
     el.disabled = true;
     el.setAttribute('aria-disabled', 'true');
   });
@@ -702,18 +695,25 @@ function lockPanel(panel, meta) {
 function unlockPanel(panel) {
   if (!panel) return;
   panel.classList.remove('section--locked');
-  const ov = panel.querySelector(':scope > .sectionLockOverlay');
-  if (ov) ov.remove();
 
-  // NEW: restore interactivity
-  panel.querySelectorAll('input, select, textarea, button').forEach(el => {
-    if (!el.closest('.sectionLockOverlay')) {
-      const was = el.getAttribute('data-prev-disabled');
-      el.disabled = (was === 'true');
+  // Restore prior disabled state
+  const ctrls = panel.querySelectorAll('input, select, textarea, button');
+  ctrls.forEach(el => {
+    if (el.closest('.sectionLockRibbon')) return;
+
+    const prev = el.getAttribute('data-prev-disabled');
+    if (prev !== null) {
+      el.disabled = (prev === '1');
       el.removeAttribute('data-prev-disabled');
-      el.removeAttribute('aria-disabled');
+    } else {
+      el.disabled = false; // default
     }
+    el.removeAttribute('aria-disabled');
   });
+
+  // Remove the small ribbon
+  const rib = panel.querySelector(':scope > .sectionLockRibbon');
+  if (rib) rib.remove();
 }
 function maskMoney() {
   const ids = ['ce_rangeTotal','ce_baseTotal','ce_siteworkTotal'];
@@ -1258,6 +1258,7 @@ updateRangeFill($('ce_regionIdx'));
     }
   } catch (e) {}
 })();
+
 
 
 
