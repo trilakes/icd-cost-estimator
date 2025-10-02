@@ -560,3 +560,66 @@ label > input[type="checkbox"]{
 /* Ensure text size doesn’t auto-adjust on iOS */
 html { -webkit-text-size-adjust: 100%; }
 
+/* ---------- Lock Ribbon: outside the panel (above the section title) ---------- */
+/* Base: ribbon sits ABOVE the section card instead of overlaying it */
+.sectionLockRibbon {
+  position: static;                /* no absolute positioning */
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 6px;              /* space above the card */
+  z-index: 1;                      /* no overlay needed anymore */
+}
+
+/* Keep the existing inner look */
+.sectionLockRibbon ._rWrap{
+  display:flex; align-items:center; gap:8px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(248,251,255,0.94));
+  border:1px solid rgba(13,42,85,0.20);
+  border-radius:999px;
+  padding:6px 10px;
+  box-shadow: 0 12px 28px rgba(10,16,28,0.12), inset 0 1px 0 rgba(255,255,255,0.85);
+  backdrop-filter: blur(8px) saturate(140%);
+}
+.sectionLockRibbon ._rSub{ margin-left: 6px; }
+
+/* Mobile: let it wrap, center it, and make the tap target comfy */
+@media (max-width: 560px){
+  .sectionLockRibbon{
+    justify-content: center;
+    flex-wrap: wrap;
+    margin: 12px 0 6px;
+  }
+  .sectionLockRibbon ._rWrap{
+    padding:8px 12px;
+  }
+  .sectionLockRibbon ._rCTA{
+    padding:8px 14px;
+    border-radius: 12px;
+  }
+}
+
+/* --- Lock Ribbon outside the panel (above the title) --- */
+.sectionLockRibbon{
+  position: static !important;       /* override old absolute */
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 6px;                /* space above the section card */
+  z-index: 1;
+}
+
+@media (max-width: 560px){
+  .sectionLockRibbon{
+    justify-content: center;
+    flex-wrap: wrap;
+    margin: 12px 0 6px;
+  }
+  .sectionLockRibbon ._rCTA{
+    padding: 8px 14px;
+    border-radius: 12px;
+  }
+}
+
