@@ -1,7 +1,3 @@
-
-
-
-
 /* ===== ICD Cost Estimator — JS (Part 1/2) ===== */
 
 /* ---------- Simple DOM helpers ---------- */
@@ -910,9 +906,22 @@ function saveOrOpenPDF(doc, filename) {
   setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
 }
 
-/* Auto-fitting KPI box text */
-function drawKPI(doc, x, y, w, h, label, value, colors) {
+function fitTextSingleLine(doc, text, maxW, startSize, minSize) {
+  let fs = startSize;
+  while (fs >= minSize) {
+    doc.setFontSize(fs);
+    if (doc.getTextWidth(text) <= maxW) return fs;
+    fs -= 1;
+  }
+  return minSize;
+}
+
+function drawKPIv2(doc, x, y, w, h, opts, colors) {
   const r = 10;
+  const padX = 14;
+  const innerW = w - padX * 2;
+
+  // Card
   doc.setDrawColor(colors.accent[0], colors.accent[1], colors.accent[2]);
   doc.setFillColor(colors.kpiBg[0], colors.kpiBg[1], colors.kpiBg[2]);
   doc.roundedRect(x, y, w, h, r, r, 'F');
@@ -921,24 +930,25 @@ function drawKPI(doc, x, y, w, h, label, value, colors) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
   doc.setTextColor(colors.accent[0], colors.accent[1], colors.accent[2]);
-  doc.text(label.toUpperCase(), x + 14, y + 20);
+  doc.text(String(opts.label || '').toUpperCase(), x + w/2, y + 18, { align: 'center' });
 
-  // Value (auto-fit to box)
-  const innerW = w - 28;
-  let fs = 20;
-  const minFs = 10;
-  let lines = [];
-  while (fs >= minFs) {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(fs);
-    lines = doc.splitTextToSize(String(value), innerW);
-    const widest = Math.max.apply(null, lines.map(t => doc.getTextWidth(t)));
-    if (widest <= innerW) break;
-    fs -= 1;
-  }
+  // Primary (single line, auto-fit)
+  const primary = String(opts.primary || '');
+  const primaryFs = fitTextSingleLine(doc, primary, innerW, 22, 14);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(primaryFs);
   doc.setTextColor(colors.navy[0], colors.navy[1], colors.navy[2]);
-  doc.text(lines, x + 14, y + 48);
+  doc.text(primary, x + w/2, y + 48, { align: 'center' });
+
+  // Secondary
+  if (opts.secondary) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(80);
+    doc.text(String(opts.secondary), x + w/2, y + 68, { align: 'center' });
+  }
 }
+
 
 /* Build Assumptions table rows */
 function buildAssumptionsRows(inp, est, money0) {
@@ -973,7 +983,52 @@ function buildAssumptionsRows(inp, est, money0) {
   ];
 }
 
-/* ---------------- Export PDF (cover + breakdown) ---------------- */
+/* /* ---------------- Export PDF (cover + breakdown) ---------------- */
+
+/* ---- KPI helpers (clean, centered, single-line fit) ---- */
+function fitTextSingleLine(doc, text, maxW, startSize = 22, minSize = 12) {
+  let fs = startSize;
+  while (fs >= minSize) {
+    doc.setFontSize(fs);
+    if (doc.getTextWidth(String(text)) <= maxW) return fs;
+    fs -= 1;
+  }
+  return minSize;
+}
+
+function drawKPIv2(doc, x, y, w, h, opts, colors) {
+  const r = 10;
+  const padX = 14;
+  const innerW = w - padX * 2;
+
+  // Card
+  doc.setDrawColor(colors.accent[0], colors.accent[1], colors.accent[2]);
+  doc.setFillColor(colors.kpiBg[0], colors.kpiBg[1], colors.kpiBg[2]);
+  doc.roundedRect(x, y, w, h, r, r, 'F');
+
+  // Label
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(colors.accent[0], colors.accent[1], colors.accent[2]);
+  doc.text(String(opts.label || '').toUpperCase(), x + w / 2, y + 18, { align: 'center' });
+
+  // Primary (auto-fit, one line)
+  const primary = String(opts.primary || '');
+  const primaryFs = fitTextSingleLine(doc, primary, innerW, 22, 14);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(primaryFs);
+  doc.setTextColor(colors.navy[0], colors.navy[1], colors.navy[2]);
+  doc.text(primary, x + w / 2, y + 46, { align: 'center' });
+
+  // Secondary (caption)
+  if (opts.secondary) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(80);
+    doc.text(String(opts.secondary), x + w / 2, y + 66, { align: 'center' });
+  }
+}
+
 async function exportPDF(inp, est) {
   await ensureJsPDF();
   const { jsPDF } = window.jspdf || {};
@@ -1011,13 +1066,44 @@ async function exportPDF(inp, est) {
   const gap = 18;
   const kpiW = (maxW - gap * 2) / 3;
 
-  const rangeText = money0(est.totals.low) + ' – ' + money0(est.totals.high);
-  const psfText   = money0(est.totals.lowPSF) + ' – ' + money0(est.totals.highPSF);
-  const baseText  = money0(est.base.structureCost) + ' • Base $/SF: ' + money0(est.totals.structurePSFout);
+  const rangePrimary = money0(est.totals.low) + ' – ' + money0(est.totals.high);
+  const rangeSecondary = 'All-in project cost';
 
-  drawKPI(doc, margin + 0*(kpiW + gap), kpiY, kpiW, kpiH, 'Estimated Range', rangeText, colors);
-  drawKPI(doc, margin + 1*(kpiW + gap), kpiY, kpiW, kpiH, '$ / SF', psfText, colors);
-  drawKPI(doc, margin + 2*(kpiW + gap), kpiY, kpiW, kpiH, 'Base Dome Shell', baseText, colors);
+  const psfPrimary   = money0(est.totals.lowPSF) + ' – ' + money0(est.totals.highPSF);
+  const psfSecondary = 'All-in $/SF';
+
+  const basePrimary   = money0(est.base.structureCost);
+  const baseSecondary = 'Base $/SF: ' + money0(est.totals.structurePSFout);
+
+  drawKPIv2(
+    doc,
+    margin + 0 * (kpiW + gap),
+    kpiY,
+    kpiW,
+    kpiH,
+    { label: 'Estimated range', primary: rangePrimary, secondary: rangeSecondary },
+    colors
+  );
+
+  drawKPIv2(
+    doc,
+    margin + 1 * (kpiW + gap),
+    kpiY,
+    kpiW,
+    kpiH,
+    { label: '$ / SF', primary: psfPrimary, secondary: psfSecondary },
+    colors
+  );
+
+  drawKPIv2(
+    doc,
+    margin + 2 * (kpiW + gap),
+    kpiY,
+    kpiW,
+    kpiH,
+    { label: 'Base dome shell', primary: basePrimary, secondary: baseSecondary },
+    colors
+  );
 
   // Assumptions card
   let y = kpiY + kpiH + 28;
@@ -1142,6 +1228,7 @@ async function exportPDF(inp, est) {
 
   saveOrOpenPDF(doc, 'ICD-Estimate-NAVY.pdf');
 }
+
 
 /* ---------------- Wiring ---------------- */
 whenReady(['ce_region'], function () {
@@ -1326,6 +1413,11 @@ updateRangeFill($('ce_regionIdx'));
   } catch (e) {}
 })();
 
+
+
+
+
+  
 
 
 
