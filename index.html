@@ -61,25 +61,44 @@
   <!-- Page wrap -->
   <div class="_wrap">
 
-    <!-- Brand bar -->
-    <div class="_brandbar" role="banner">
+    <div class="_brandbar" role="banner" aria-label="Insulated Concrete Domes — Planning & Cost Estimator">
       <div class="_brandleft">
-        <div class="_mark">ICD Cost Estimator<span>™</span></div>
-        <div class="_tagline">Pro-grade cost planning & modeling for Insulated Concrete Domes</div>
+        <div class="_brandRow">
+          <span class="_logo" aria-hidden="true">
+            <svg viewBox="0 0 64 36" width="28" height="28" fill="none">
+              <defs>
+                <linearGradient id="domeGrad" x1="0" y1="0" x2="64" y2="0">
+                  <stop offset="0" stop-color="#2a55d8"/><stop offset="1" stop-color="#1b3fb2"/>
+                </linearGradient>
+              </defs>
+              <path d="M4 32a28 28 0 1 1 56 0" stroke="url(#domeGrad)" stroke-width="3.2" />
+              <path d="M6 32h52" stroke="#6ea3ff" stroke-linecap="round" />
+            </svg>
+          </span>
+          <div class="_titleWrap">
+            <div class="_brandOverline">Insulated Concrete Domes</div>
+            <div class="_mark">Dome Planning & Cost Estimator<span>™</span></div>
+          </div>
+        </div>
+        <div class="_tagline">Plan scope, calibrate to your market, and export a lender-ready cost-estimate.</div>
       </div>
-      <span class="_pill">Client-side • No data leaves your browser</span>
+      <div class="_brandRight">
+        <span class="_pill _pill--ghost">Client-side • Your data stays local</span>
+      </div>
     </div>
 
     <!-- ===== PROJECT BASICS (CARD) ===== -->
     <section class="_panel _sectionCard" role="region" aria-label="Project Basics">
       <h2 class="_sectionTitle">Project Basics</h2>
       <div class="_grid">
+        <!-- SF -->
         <div class="_field">
           <label class="_label" for="ce_sf">Conditioned SF</label>
           <input id="ce_sf" class="_input" type="number" min="0" step="50" placeholder="e.g., 2000" />
           <div class="_hint">Heated/cooled interior square footage to be built.</div>
         </div>
 
+        <!-- Region preset -->
         <div class="_field">
           <label class="_label" for="ce_region">Region</label>
           <select id="ce_region" class="_input">
@@ -88,9 +107,10 @@
             <option value="1.15">High-cost metro (1.15)</option>
             <option value="1.30">Very high (1.30)</option>
           </select>
-          <div class="_hint">A quick starting point. Rural/smaller markets lean lower; big coastal cities lean higher.</div>
+          <div class="_hint">Rural/smaller markets lean lower; big coastal cities lean higher.</div>
         </div>
 
+        <!-- Region slider -->
         <div class="_field _wide">
           <label class="_label" for="ce_regionIdx">Region Cost Index (fine-tune)</label>
           <div class="_inline">
@@ -102,24 +122,10 @@
             <option value="1.10"></option><option value="1.20"></option><option value="1.30"></option><option value="1.40"></option>
           </datalist>
           <div class="_ticks"><span>0.80</span><span>0.90</span><span>1.00</span><span>1.10</span><span>1.20</span><span>1.30</span><span>1.40</span></div>
-          <div class="_hint">
-            <strong>For homeowners:</strong> Prices vary by location. If your area tends to run higher or lower than average,
-            slide this left (cheaper) or right (costlier). Not sure? Leave at <strong>1.00</strong> and adjust after you calculate.
-          </div>
+          <div class="_hint"><strong>Tip:</strong> Not sure? Leave at <strong>1.00</strong> and adjust after you calculate.</div>
         </div>
 
-        <div class="_field">
-          <label class="_label" for="ce_diameter">Dome Diameter (ft)</label>
-          <input id="ce_diameter" class="_input" type="number" min="20" step="1" placeholder="e.g., 50" />
-          <div class="_hint">Diameter = width of the dome at the base, in feet. Helpful for sanity checks and planning.</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ===== DESIGN & ENVELOPE (CARD) ===== -->
-    <section class="_panel _sectionCard" role="region" aria-label="Design and Envelope">
-      <h2 class="_sectionTitle">Design &amp; Envelope</h2>
-      <div class="_grid">
+        <!-- Finish -->
         <div class="_field">
           <label class="_label" for="ce_finish">Finish Level</label>
           <select id="ce_finish" class="_input">
@@ -128,9 +134,10 @@
             <option value="1.20">Premium</option>
             <option value="1.35">Luxury</option>
           </select>
-          <div class="_hint">Overall interior finish quality. Higher levels include upgraded materials and detailing.</div>
+          <div class="_hint">Affects interior & allowance buckets.</div>
         </div>
 
+        <!-- Domes -->
         <div class="_field">
           <label class="_label" for="ce_domes">Number of Domes</label>
           <select id="ce_domes" class="_input">
@@ -138,18 +145,74 @@
             <option value="2">2</option>
             <option value="3">3+</option>
           </select>
-          <div class="_hint">More domes add complexity and connectors, which increases cost.</div>
         </div>
 
+        <!-- Height -->
         <div class="_field">
           <label class="_label" for="ce_height">Shell Height</label>
           <select id="ce_height" class="_input">
             <option value="std" selected>Standard</option>
-            <option value="tall">Tall</option>
+            <option value="tall">Tall (+ loft potential)</option>
           </select>
-          <div class="_hint">Taller shells add area and materials — good for lofts; expect a modest cost increase.</div>
         </div>
 
+        <!-- Basement -->
+        <div class="_field">
+          <label class="_label" for="ce_basement">Basement</label>
+          <select id="ce_basement" class="_input">
+            <option value="none" selected>None</option>
+            <option value="partial">Partial (~50%)</option>
+            <option value="full">Full (~100%)</option>
+          </select>
+        </div>
+
+        <!-- Bedrooms -->
+        <div class="_field">
+          <label class="_label" for="ce_bedrooms">Bedrooms</label>
+          <input id="ce_bedrooms" class="_input" type="number" min="0" step="1" value="0" />
+        </div>
+
+        <!-- Bathrooms -->
+        <div class="_field">
+          <label class="_label" for="ce_baths">Bathrooms</label>
+          <select id="ce_baths" class="_input">
+            <option value="1">1 bath</option>
+            <option value="2" selected>2 baths</option>
+            <option value="3">3 baths</option>
+            <option value="4">4 baths</option>
+            <option value="5">5+ baths</option>
+          </select>
+        </div>
+
+        <!-- Contingency -->
+        <div class="_field">
+          <label class="_label" for="ce_contPct">Contingency %</label>
+          <input id="ce_contPct" class="_input" type="number" min="0" max="100" step="0.1" value="10" />
+          <div class="_hint">Typical planning allowance: 5–15%.</div>
+        </div>
+
+        <!-- Include Sitework (MOVED HERE) -->
+        <div class="_field">
+          <label class="_label" for="ce_incSitework">
+            <input type="checkbox" id="ce_incSitework" checked /> Include Sitework
+          </label>
+          <div class="_hint">If unchecked, sitework/rough grading is assumed by owner/others.</div>
+        </div>
+
+        <!-- Diameter (planning helper) -->
+        <div class="_field">
+          <label class="_label" for="ce_diameter">Dome Diameter (ft)</label>
+          <input id="ce_diameter" class="_input" type="number" min="20" step="1" placeholder="e.g., 50" />
+          <div class="_hint">Width of the dome at the base, in feet (sanity check only).</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== DESIGN & ENVELOPE (CARD) ===== -->
+    <section class="_panel _sectionCard" role="region" aria-label="Design and Envelope">
+      <h2 class="_sectionTitle">Design &amp; Envelope</h2>
+      <div class="_grid">
+        <!-- Glazing -->
         <div class="_field">
           <label class="_label" for="ce_glazing">Glazing %</label>
           <select id="ce_glazing" class="_input">
@@ -158,19 +221,10 @@
             <option value="0.30">30%</option>
             <option value="0.40">40%</option>
           </select>
-          <div class="_hint">How much of the shell surface is windows/doors. More glazing = more cost.</div>
+          <div class="_hint">How much of the shell surface is windows/doors.</div>
         </div>
 
-        <div class="_field">
-          <label class="_label" for="ce_basement">Basement</label>
-          <select id="ce_basement" class="_input">
-            <option value="none" selected>None</option>
-            <option value="partial">Partial (~50%)</option>
-            <option value="full">Full (~100%)</option>
-          </select>
-          <div class="_hint">Choose a partial or full basement to add livable/storage space under the dome.</div>
-        </div>
-
+        <!-- Shell thickness -->
         <div class="_field">
           <label class="_label" for="ce_shellThk">Shell Thickness (in)</label>
           <select id="ce_shellThk" class="_input">
@@ -178,9 +232,9 @@
             <option value="5">5″</option>
             <option value="6">6″</option>
           </select>
-          <div class="_hint">Thicker shotcrete/rebar increases strength and cost. Use for larger spans or engineering needs.</div>
         </div>
 
+        <!-- Mix type -->
         <div class="_field">
           <label class="_label" for="ce_mixType">Mix Type</label>
           <select id="ce_mixType" class="_input">
@@ -188,15 +242,15 @@
             <option value="pozz">Pozzolan</option>
             <option value="hemp">Hempcrete</option>
           </select>
-          <div class="_hint">Alternate mixes can improve performance or sustainability; they’re typically pricier.</div>
         </div>
 
+        <!-- Oculus -->
         <div class="_field">
           <label class="_label" for="ce_oculusCount">Oculus / Skylights</label>
           <input id="ce_oculusCount" class="_input" type="number" min="0" step="1" value="0" />
-          <div class="_hint">How many skylight/oculus openings you want at the shell.</div>
         </div>
 
+        <!-- Connector -->
         <div class="_field">
           <label class="_label" for="ce_connector">Connector / Tunnel</label>
           <select id="ce_connector" class="_input">
@@ -205,23 +259,9 @@
             <option value="med">Medium</option>
             <option value="long">Long</option>
           </select>
-          <div class="_hint">Links domes or adds entry tunnels. Longer connectors add more shell work.</div>
         </div>
 
-        <!-- NEW: Bedrooms + Bathrooms moved here -->
-        <div class="_field">
-          <label class="_label" for="ce_bedrooms">Bedrooms</label>
-          <input id="ce_bedrooms" class="_input" type="number" min="0" step="1" value="0" />
-          <div class="_hint">Number of bedrooms in the conditioned dome(s).</div>
-        </div>
-
-        <div class="_field">
-          <label class="_label" for="ce_baths">Bathrooms</label>
-          <input id="ce_baths" class="_input" type="number" min="1" step="1" value="2" />
-          <div class="_hint">Total count of full/half baths. Plumbing scales with bathroom count.</div>
-        </div>
-
-        <!-- NEW: Non-conditioned dome fields (garage/utility) -->
+        <!-- Non-conditioned domes -->
         <div class="_field">
           <label class="_label" for="ce_ncDomes">Non-Conditioned Domes</label>
           <input id="ce_ncDomes" class="_input" type="number" min="0" step="1" value="0" />
@@ -231,7 +271,6 @@
         <div class="_field">
           <label class="_label" for="ce_ncSf">Non-Conditioned SF (each)</label>
           <input id="ce_ncSf" class="_input" type="number" min="0" step="50" value="0" />
-          <div class="_hint">Square footage for each non-conditioned dome.</div>
         </div>
       </div>
     </section>
@@ -257,17 +296,11 @@
             <option value="standard" selected>Standard</option>
             <option value="advanced">Advanced</option>
           </select>
-          <div class="_hint">More zones, smart systems, or specialty equipment increase mechanical/electrical/plumbing costs.</div>
+          <div class="_hint">More zones, smart systems, or specialty equipment increase costs.</div>
         </div>
 
-        <div class="_field">
-          <label class="_label" for="ce_incSitework">
-            <input type="checkbox" id="ce_incSitework" checked /> Include Sitework
-          </label>
-          <div class="_hint">If unchecked, sitework/rough grading is assumed by owner/others.</div>
-        </div>
-
-        <!-- NEW: Driveway UI moved just under Include Sitework (compact) -->
+        <!-- (MOVED) Include Sitework checkbox was here; removed -->
+        <!-- Driveway toggle + length -->
         <div class="_field">
           <label class="_label" for="ce_optDriveway">
             <input type="checkbox" id="ce_optDriveway" /> Driveway
@@ -307,29 +340,22 @@
           <div class="_hint">Remote sites add logistics for crews, materials, and equipment.</div>
         </div>
 
-        <!-- UPDATED: Electricity Already On Site -->
+        <!-- Electricity Already On Site -->
         <div class="_field">
           <label class="_label" for="ce_inflationPower">Electricity Already On Site</label>
           <select id="ce_inflationPower" class="_input">
             <option value="onsite" selected>Yes</option>
             <option value="generator">No — Use Generator Rental</option>
           </select>
-          <div class="_hint">If reliable power isn’t available for Airform inflation, choose the generator option.</div>
+          <div class="_hint">If reliable power isn’t available for Airform inflation, choose generator.</div>
         </div>
-
-        <!-- Lightning Protection REMOVED -->
       </div>
     </section>
 
-    <!-- ===== CONTINGENCY + ACTIONS (CARD) ===== -->
+    <!-- ===== ACTIONS (CARD) ===== -->
     <section class="_panel _sectionCard" role="region" aria-label="Contingency">
-      <h2 class="_sectionTitle">Contingency</h2>
+      <h2 class="_sectionTitle">Actions</h2>
       <div class="_grid">
-        <div class="_field">
-          <label class="_label" for="ce_contPct">Contingency %</label>
-          <input id="ce_contPct" class="_input" type="number" min="0" max="100" step="0.1" value="10" />
-          <div class="_hint">A planning cushion for the unknowns (design decisions, site surprises, market swings).</div>
-        </div>
         <div class="_field _full">
           <div class="_inline _actions-mobile">
             <button id="ce_calcBtn" class="_btn _primary" type="button">Calculate</button>
@@ -340,26 +366,54 @@
       </div>
     </section>
 
-    <!-- ===== RESULTS: SUMMARY CARDS ===== -->
-    <section class="_results-pad">
-      <div class="_cards">
-        <div class="_card">
-          <h3>Estimated Range</h3>
-          <div class="_big" id="ce_rangeTotal">$0 – $0</div>
-          <div class="_small" id="ce_rangePerSf">$/SF: $0 – $0</div>
-        </div>
-        <div class="_card">
-          <h3>Base Dome Shell</h3>
-          <div class="_big" id="ce_baseTotal">$0</div>
-          <div class="_small" id="ce_basePsf">$/SF: $0</div>
-        </div>
-        <div class="_card">
-          <h3>Sitework &amp; Rough Grading</h3>
-          <div class="_big" id="ce_siteworkTotal">$0 – $0</div>
-          <div class="_small" id="ce_siteworkNote">Included</div>
-        </div>
+    <!-- ===== RESULTS SECTION ===== -->
+<section class="resultsHeader">
+  <h2 class="resultsTitle">Your Project Costs</h2>
+  <p class="resultsSub">
+    Understand your estimated costs below. You can adjust the region index and recalculate to see how costs change based on location.
+  </p>
+  <div class="upgradeNote">
+    Upgrade to unlock the complete breakdown and download a project-ready PDF estimate you can share with builders or lenders.
+    <a href="https://buy.stripe.com/4gMdR95Gl9cdddLch09MY00" target="_blank" class="upgradeBtn">
+      Unlock Full Estimate
+    </a>
+  </div>
+</section>
+
+
+<section class="_results-pad">
+  <div class="_cards">
+    <!-- All-in Project -->
+    <div class="_card">
+      <h3>All-In Project Range</h3>
+      <div class="_big" id="ce_rangeTotal">$0 – $0</div>
+      <div class="_small" id="ce_rangePerSf">$/SF: $0 – $0</div>
+      <div class="_cardHint">
+        Includes sitework, foundation, framing, MEP systems, finishes, and all other turnkey costs.
       </div>
-    </section>
+    </div>
+
+    <!-- Dome Shell -->
+    <div class="_card">
+      <h3>Dome Shell Structure</h3>
+      <div class="_big" id="ce_baseTotal">$0</div>
+      <div class="_small" id="ce_basePsf">$/SF: $0</div>
+      <div class="_cardHint">
+        Covers the Airform, spray foam insulation, rebar, and shotcrete shell.
+      </div>
+    </div>
+
+    <!-- Sitework -->
+    <div class="_card">
+      <h3>Sitework &amp; Grading</h3>
+      <div class="_big" id="ce_siteworkTotal">$0 – $0</div>
+      <div class="_small" id="ce_siteworkNote">Included</div>
+      <div class="_cardHint">
+        Covers clearing, excavation, and rough grading of the building site.
+      </div>
+    </div>
+  </div>
+</section>
 
     <!-- ===== ASSUMPTIONS (CARD) ===== -->
     <section class="_panel _sectionCard" role="region" aria-label="Assumptions">
@@ -369,39 +423,38 @@
       <div id="ce_assumptions" class="_muted" style="display:none;"></div>
 
       <!-- Compact list version (auto-built from raw above) -->
-      <div id="ce_assumptions_grid">
-        <!-- Filled dynamically -->
-      </div>
+      <div id="ce_assumptions_grid"></div>
 
       <div class="_disclaimer" style="margin-top:12px;">
         <strong>Important:</strong> Planning-level estimate only (not a bid). Final costs depend on site, engineering, and trade bids.
       </div>
     </section>
 
-    <!-- ===== LINE-ITEM BREAKDOWN (CARD) ===== -->
-    <section class="_panel _breakdown" role="region" aria-label="Line-item Breakdown">
-      <h2 class="_sectionTitle">Line-Item Breakdown</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Category</th>
-            <th>Description</th>
-            <th class="_right">Low</th>
-            <th class="_right">High</th>
-          </tr>
-        </thead>
-        <tbody id="ce_breakdown">
-          <tr>
-            <td colspan="4" class="_muted" style="text-align:center;padding:18px">
-              Run a calculation to see details.
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
+    <!-- ===== LINE-ITEM BREAKDOWN (MOBILE-FRIENDLY) ===== -->
+<section class="_panel _breakdown" role="region" aria-label="Line-item Breakdown">
+  <h2 class="_sectionTitle">Line-Item Breakdown</h2>
 
-  </div> <!-- /_wrap -->
-</div> <!-- /#icdce -->
+  <!-- New scroll wrapper -->
+  <div class="_tableScroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Category</th>
+          <th>Description</th>
+          <th class="_right">Low</th>
+          <th class="_right">High</th>
+        </tr>
+      </thead>
+      <tbody id="ce_breakdown">
+        <tr>
+          <td colspan="4" class="_muted" style="text-align:center;padding:18px">
+            Run a calculation to see details.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
 
 <!-- Sticky action bar -->
 <div class="_stickybar" id="icdce_sticky" role="region" aria-label="Quick actions" aria-hidden="true" style="display:none">
@@ -414,7 +467,7 @@
 <div id="icdce_paywall" class="_modalBackdrop" aria-hidden="true">
   <div class="_modal" role="dialog" aria-modal="true" aria-labelledby="pw_title">
     <h3 id="pw_title">Unlock Full Features</h3>
-    <p>Unlock all premium controls and features — including advanced design, site options, and PDF export. Complete checkout and you’ll be returned here automatically.</p>
+    <p>Upgrade to view all design & site features and generate a professional line-item PDF estimate. Complete checkout and you’ll be returned here automatically.</p>
     <div class="_row _actions-mobile" style="display:flex; gap:12px;">
       <button id="pw_payBtn" class="_btn _good" type="button">Go to Checkout</button>
       <button id="pw_closeBtn" class="_btn _secondary" type="button">Close</button>
@@ -482,12 +535,9 @@
       else if ((m = t.match(/^Access:\s*(.+)$/i))) data.access = titleCase(m[1]);
       else if ((m = t.match(/^Contingency:\s*([0-9.]+)%/i))) data.contingency = m[1] + '%';
 
-      // Power wording: "Electricity on site: Yes" or "No (use generator...)"
       else if ((m = t.match(/^Electricity on site:\s*(.+)$/i))) {
         data.electricity = /yes/i.test(m[1]) ? 'Yes' : 'No — generator';
       }
-
-      // Non-conditioned domes summary: "Non-conditioned dome(s): X @ Y SF each"
       else if ((m = t.match(/^Non-conditioned dome\(s\):\s*(\d+)\s*@\s*(\d+)\s*SF/i))) {
         data.nc = m[1] + ' × ' + m[2] + ' SF';
       }
@@ -558,6 +608,10 @@
 </script>
 </body>
 </html>
+
+
+
+
 
 
 
