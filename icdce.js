@@ -1,7 +1,3 @@
-
-
-
-
 /* ===== ICD Cost Estimator — JS (Part 1/2) ===== */
 
 /* ---------- Simple DOM helpers ---------- */
@@ -662,31 +658,39 @@ function ensureOverlay(panel, opts) {
   const oldInside = panel.querySelector(':scope > .sectionLockRibbon');
   if (oldInside) oldInside.remove();
 
-  // If the previous sibling is already our outside ribbon, reuse it
+  // If the previous sibling is already our ribbon, reuse it
   let rib = panel.previousElementSibling;
   if (!(rib && rib.classList && rib.classList.contains('sectionLockRibbon'))) {
     rib = document.createElement('div');
     rib.className = 'sectionLockRibbon';
     rib.innerHTML = `
       <div class="_rWrap">
-        <div class="_rTitle">${(opts && opts.title) || 'Premium Controls'}</div>
+        <div class="_rTitle">${(opts && opts.title) || 'Advanced Options'}</div>
         <button type="button" class="_rCTA">${(opts && opts.cta) || 'Unlock'}</button>
       </div>
-      <div class="_rSub">${(opts && opts.sub) || 'See all design + site options and export a pro PDF'}</div>
+      <div class="_rSub">${(opts && opts.sub) || 'Upgrade to view all design & site features and Download a professional line-item PDF estimate'}</div>
     `;
-    panel.parentNode.insertBefore(rib, panel);           // <-- insert ABOVE the section
-    rib.querySelector('._rCTA')?.addEventListener('click', () => openPaywall());
+    // Insert BEFORE the section so it sits above the title
+    panel.parentNode.insertBefore(rib, panel);
+    rib.querySelector('._rCTA')?.addEventListener('click', openPaywall);
   } else {
     // Update text if already present
-    rib.querySelector('._rTitle')?.textContent = (opts && opts.title) || 'Premium Controls';
-    rib.querySelector('._rSub')?.textContent   = (opts && opts.sub)   || 'See all design + site options and export a pro PDF';
+    const t = rib.querySelector('._rTitle');
+    const sub = rib.querySelector('._rSub');
     const cta = rib.querySelector('._rCTA');
-    if (cta) cta.textContent = (opts && opts.cta) || 'Unlock';
+    if (t && opts?.title) t.textContent = opts.title;
+    if (sub && opts?.sub) sub.textContent = opts.sub;
+    if (cta && opts?.cta) cta.textContent = opts.cta;
   }
 
   return rib;
 }
 
+/* ---------- NEW: helper to remove outside ribbons once paid ---------- */
+function removeOutsideRibbons() {
+  // Remove any ribbons that were inserted before sections
+  document.querySelectorAll('.sectionLockRibbon').forEach(el => el.remove());
+}
 
 
 /* ---------- Lock/Unlock now disable individual controls ---------- */
@@ -717,7 +721,7 @@ function unlockPanel(panel) {
   // Restore prior disabled state
   const ctrls = panel.querySelectorAll('input, select, textarea, button');
   ctrls.forEach(el => {
-    if (el.closest('.sectionLockRibbon')) return; // skip ribbon controls if any
+    if (el.closest('.sectionLockRibbon')) return;
 
     const prev = el.getAttribute('data-prev-disabled');
     if (prev !== null) {
@@ -729,22 +733,28 @@ function unlockPanel(panel) {
     el.removeAttribute('aria-disabled');
   });
 
-  // Remove ribbon if it was rendered INSIDE the panel (old behavior)
-  const ribInside = panel.querySelector(':scope > .sectionLockRibbon');
-  if (ribInside) ribInside.remove();
-
-  // Remove ribbon if it was rendered BEFORE (outside/above) the panel (new behavior)
-  const prev = panel.previousElementSibling;
-  if (prev && prev.classList && prev.classList.contains('sectionLockRibbon')) {
-    prev.remove();
-  }
+  // Remove the small ribbon
+  const rib = panel.querySelector(':scope > .sectionLockRibbon');
+  if (rib) rib.remove();
 }
-
+// GATE: Blur All-In only; keep Dome Shell + Sitework visible
 function maskMoney() {
-  const ids = ['ce_rangeTotal','ce_baseTotal','ce_siteworkTotal'];
-  ids.forEach(id => { const el = $(id); if (el) el.classList.add('_moneyMask'); });
-  // Mask line-item numeric cells
-  document.querySelectorAll('section._breakdown td._right').forEach(td => td.classList.add('_moneyMask'));
+  // Blur All-In totals ($ and $/SF)
+  ['ce_rangeTotal','ce_rangePerSf'].forEach(id => {
+    const el = $(id);
+    if (el) el.classList.add('_moneyMask');
+  });
+
+  // Ensure these remain UNBLURRED
+  ['ce_baseTotal','ce_basePsf','ce_siteworkTotal','ce_siteworkNote'].forEach(id => {
+    const el = $(id);
+    if (el) el.classList.remove('_moneyMask');
+  });
+
+  // Keep line-item Low/High numbers gated
+  document
+    .querySelectorAll('section._breakdown td._right')
+    .forEach(td => td.classList.add('_moneyMask'));
 }
 function unmaskMoney() {
   const sel = ['#ce_rangeTotal','#ce_baseTotal','#ce_siteworkTotal','section._breakdown td._right'];
@@ -789,9 +799,12 @@ function unwrapTeaser() {
 function applyGates() {
   if (isPaid()) {
     // Fully unlocked
-    ['Design and Envelope','Site and Systems','Other Site Factors'].forEach(lbl => unlockPanel(findPanelByAria(lbl)));
-    unmaskMoney();      // show all dollar amounts
-    unwrapTeaser();     // make sure no teaser wrapper remains
+    ['Design and Envelope','Site and Systems','Other Site Factors']
+      .forEach(lbl => unlockPanel(findPanelByAria(lbl)));
+
+    unmaskMoney();          // show all dollar amounts
+    unwrapTeaser();         // make sure no teaser wrapper remains
+    removeOutsideRibbons(); // NEW: clears any ribbons inserted before sections
     return;
   }
 
@@ -801,9 +814,10 @@ function applyGates() {
   lockPanel(findPanelByAria('Other Site Factors'), {title:'Premium Controls', cta:'Unlock Other Factors'});
 
   // Keep Project Basics & Contingency interactive
-  maskMoney();     // <— this already blurs all money cells, including table Low/High
-  unwrapTeaser();  // <— ensure the table is NOT height-limited; full list is visible
+  maskMoney();     // this blurs all money cells, including table Low/High
+  unwrapTeaser();  // ensure the table is NOT height-limited; full list is visible
 }
+
 /* ===== PDF (Part 2/2): jsPDF loader + export + wiring/init ===== */
 
 /* ---------------- jsPDF loader ---------------- */
@@ -1284,6 +1298,12 @@ updateRangeFill($('ce_regionIdx'));
     }
   } catch (e) {}
 })();
+
+
+
+
+
+  
 
 
 
