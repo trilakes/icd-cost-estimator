@@ -1,3 +1,7 @@
+
+
+
+
 /* ===== ICD Cost Estimator — JS (Part 1/2) ===== */
 
 /* ---------- Simple DOM helpers ---------- */
@@ -737,16 +741,15 @@ function unlockPanel(panel) {
   const rib = panel.querySelector(':scope > .sectionLockRibbon');
   if (rib) rib.remove();
 }
-// GATE: Blur All-In only; keep Dome Shell + Sitework visible
 function maskMoney() {
-  // Blur All-In totals ($ and $/SF)
-  ['ce_rangeTotal','ce_rangePerSf'].forEach(id => {
+  // Blur All-In TOTAL dollars only (keep $/SF visible for free users)
+  ['ce_rangeTotal'].forEach(id => {
     const el = $(id);
     if (el) el.classList.add('_moneyMask');
   });
 
-  // Ensure these remain UNBLURRED
-  ['ce_baseTotal','ce_basePsf','ce_siteworkTotal','ce_siteworkNote'].forEach(id => {
+  // Ensure these remain UNBLURRED (visible for both unpaid & paid)
+  ['ce_rangePerSf', 'ce_baseTotal','ce_basePsf','ce_siteworkTotal','ce_siteworkNote'].forEach(id => {
     const el = $(id);
     if (el) el.classList.remove('_moneyMask');
   });
@@ -756,10 +759,20 @@ function maskMoney() {
     .querySelectorAll('section._breakdown td._right')
     .forEach(td => td.classList.add('_moneyMask'));
 }
+
 function unmaskMoney() {
-  const sel = ['#ce_rangeTotal','#ce_baseTotal','#ce_siteworkTotal','section._breakdown td._right'];
+  const sel = [
+    '#ce_rangeTotal',   // All-In $ range
+    '#ce_rangePerSf',   // All-In $/SF (now explicitly unmasked on paid)
+    '#ce_baseTotal',    // Dome shell $
+    '#ce_basePsf',      // Dome shell $/SF
+    '#ce_siteworkTotal',
+    '#ce_siteworkNote',
+    'section._breakdown td._right'
+  ];
   document.querySelectorAll(sel.join(',')).forEach(el => el.classList.remove('_moneyMask'));
 }
+
 function wrapTeaser() {
   const breakdownPanel = document.querySelector('section._breakdown');
   if (!breakdownPanel) return;
@@ -804,7 +817,14 @@ function applyGates() {
 
     unmaskMoney();          // show all dollar amounts
     unwrapTeaser();         // make sure no teaser wrapper remains
-    removeOutsideRibbons(); // NEW: clears any ribbons inserted before sections
+    removeOutsideRibbons(); // clears any ribbons inserted before sections
+
+    // NEW: hide upgrade note + unlock button(s)
+    const note = document.querySelector('.upgradeNote');
+    if (note) note.style.display = 'none';
+    const unlockBtns = document.querySelectorAll('.upgradeBtn');
+    unlockBtns.forEach(btn => btn.style.display = 'none');
+
     return;
   }
 
@@ -814,9 +834,16 @@ function applyGates() {
   lockPanel(findPanelByAria('Other Site Factors'), {title:'Premium Controls', cta:'Unlock Other Factors'});
 
   // Keep Project Basics & Contingency interactive
-  maskMoney();     // this blurs all money cells, including table Low/High
-  unwrapTeaser();  // ensure the table is NOT height-limited; full list is visible
+  maskMoney();     // blur money cells
+  unwrapTeaser();  // ensure full list is visible
+
+  // NEW: show upgrade note + unlock button(s)
+  const note = document.querySelector('.upgradeNote');
+  if (note) note.style.display = 'flex';
+  const unlockBtns = document.querySelectorAll('.upgradeBtn');
+  unlockBtns.forEach(btn => btn.style.display = '');
 }
+
 
 /* ===== PDF (Part 2/2): jsPDF loader + export + wiring/init ===== */
 
@@ -1258,8 +1285,8 @@ whenReady(['pw_payBtn','pw_closeBtn','pw_apply','pw_code','pw_msg'], function (p
       }
     });
   }
-  if (isPaid()) unhideActions();
-  applyGates(); // set initial lock/unlock state
+  unhideActions();   // show the floating action bar for everyone
+applyGates();      // STILL locks premium sections until paid
 })();
 
 /* First-run UI nits */
