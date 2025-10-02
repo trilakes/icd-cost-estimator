@@ -1,6 +1,8 @@
 
 
 
+
+
 /* ===== ICD Cost Estimator — JS (Part 1/2) ===== */
 
 /* ---------- Simple DOM helpers ---------- */
@@ -915,8 +917,14 @@ function saveOrOpenPDF(doc, filename) {
 
 
 
-/* Build Assumptions table rows */
+/* Build Assumptions table rows — now includes SFs at the top */
 function buildAssumptionsRows(inp, est, money0) {
+  const fmtSF = n => `${Math.max(0, Math.round(n || 0)).toLocaleString()} SF`;
+
+  const conditionedSF = Math.max(0, +inp.sf || 0);
+  const ncTotalSF = (inp.ncDomes > 0 && inp.ncSf > 0) ? (inp.ncDomes * inp.ncSf) : 0;
+  const projectTotalSF = conditionedSF + ncTotalSF;
+
   const sw = est.parts.sitework;
   const swVal = sw.included ? (money0(sw.low) + ' – ' + money0(sw.high)) : 'Excluded';
   const basement = inp.basement === 'none'
@@ -926,6 +934,12 @@ function buildAssumptionsRows(inp, est, money0) {
   const height = (inp.height === 'tall' ? 'tall shell' : 'std shell');
 
   return [
+    // NEW: Square footage basics
+    ['Conditioned SF', fmtSF(conditionedSF)],
+    ...(ncTotalSF ? [['Non-conditioned SF', fmtSF(ncTotalSF)]] : []),
+    ['Total Project SF', fmtSF(projectTotalSF)],
+
+    // Existing “project basics”
     ['Region', regionLabel(est.parts.regionFactor) + ' (' + est.parts.regionFactor.toFixed(2) + ')'],
     ['Finish', finishLabel(+inp.finish || 1)],
     ['Glazing', ((+inp.glazing || 0) * 100).toFixed(0) + '%'],
@@ -947,6 +961,7 @@ function buildAssumptionsRows(inp, est, money0) {
     ...(inp.ncDomes > 0 && inp.ncSf > 0 ? [['Non-conditioned domes', inp.ncDomes + ' @ ' + inp.ncSf + ' SF each']] : [])
   ];
 }
+
 
 /* ---------------- Export PDF (cover + breakdown) ---------------- */
 
@@ -1365,6 +1380,12 @@ updateRangeFill($('ce_regionIdx'));
     }
   } catch (e) {}
 })();
+
+
+
+
+
+  
 
 
 
