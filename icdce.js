@@ -1,3 +1,6 @@
+
+
+
 /* ===== ICD Cost Estimator — JS (Part 1/2) ===== */
 
 /* ---------- Simple DOM helpers ---------- */
@@ -897,8 +900,12 @@ function saveOrOpenPDF(doc, filename) {
   try {
     const fe = window.frameElement;
     const sandboxed = !!(fe && fe.hasAttribute('sandbox'));
-    if (!sandboxed && ('download' in HTMLAnchorElement.prototype)) { doc.save(filename); return; }
+    if (!sandboxed && ('download' in HTMLAnchorElement.prototype)) {
+      doc.save(filename);
+      return;
+    }
   } catch (_) {}
+
   const blob = doc.output('blob');
   const url = URL.createObjectURL(blob);
   const w = window.open(url, '_blank', 'noopener');
@@ -906,48 +913,6 @@ function saveOrOpenPDF(doc, filename) {
   setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
 }
 
-function fitTextSingleLine(doc, text, maxW, startSize, minSize) {
-  let fs = startSize;
-  while (fs >= minSize) {
-    doc.setFontSize(fs);
-    if (doc.getTextWidth(text) <= maxW) return fs;
-    fs -= 1;
-  }
-  return minSize;
-}
-
-function drawKPIv2(doc, x, y, w, h, opts, colors) {
-  const r = 10;
-  const padX = 14;
-  const innerW = w - padX * 2;
-
-  // Card
-  doc.setDrawColor(colors.accent[0], colors.accent[1], colors.accent[2]);
-  doc.setFillColor(colors.kpiBg[0], colors.kpiBg[1], colors.kpiBg[2]);
-  doc.roundedRect(x, y, w, h, r, r, 'F');
-
-  // Label
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
-  doc.setTextColor(colors.accent[0], colors.accent[1], colors.accent[2]);
-  doc.text(String(opts.label || '').toUpperCase(), x + w/2, y + 18, { align: 'center' });
-
-  // Primary (single line, auto-fit)
-  const primary = String(opts.primary || '');
-  const primaryFs = fitTextSingleLine(doc, primary, innerW, 22, 14);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(primaryFs);
-  doc.setTextColor(colors.navy[0], colors.navy[1], colors.navy[2]);
-  doc.text(primary, x + w/2, y + 48, { align: 'center' });
-
-  // Secondary
-  if (opts.secondary) {
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.setTextColor(80);
-    doc.text(String(opts.secondary), x + w/2, y + 68, { align: 'center' });
-  }
-}
 
 
 /* Build Assumptions table rows */
@@ -983,50 +948,72 @@ function buildAssumptionsRows(inp, est, money0) {
   ];
 }
 
-/* /* ---------------- Export PDF (cover + breakdown) ---------------- */
+/* ---------------- Export PDF (cover + breakdown) ---------------- */
 
-/* ---- KPI helpers (clean, centered, single-line fit) ---- */
-function fitTextSingleLine(doc, text, maxW, startSize = 22, minSize = 12) {
-  let fs = startSize;
-  while (fs >= minSize) {
-    doc.setFontSize(fs);
-    if (doc.getTextWidth(String(text)) <= maxW) return fs;
-    fs -= 1;
-  }
-  return minSize;
-}
-
-function drawKPIv2(doc, x, y, w, h, opts, colors) {
-  const r = 10;
-  const padX = 14;
-  const innerW = w - padX * 2;
-
-  // Card
-  doc.setDrawColor(colors.accent[0], colors.accent[1], colors.accent[2]);
-  doc.setFillColor(colors.kpiBg[0], colors.kpiBg[1], colors.kpiBg[2]);
-  doc.roundedRect(x, y, w, h, r, r, 'F');
-
-  // Label
+/* Executive Summary helpers (left-aligned, no boxes) */
+function drawLabelValueRow(doc, x, y, w, label, value, colors) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
-  doc.setTextColor(colors.accent[0], colors.accent[1], colors.accent[2]);
-  doc.text(String(opts.label || '').toUpperCase(), x + w / 2, y + 18, { align: 'center' });
+  doc.setTextColor(90);
+  const labelText = String(label).toUpperCase();
+  doc.text(labelText, x, y);
 
-  // Primary (auto-fit, one line)
-  const primary = String(opts.primary || '');
-  const primaryFs = fitTextSingleLine(doc, primary, innerW, 22, 14);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(primaryFs);
+  const labelW = doc.getTextWidth(labelText + '  ');
+  const valueX = x + Math.min(140, labelW + 12); // keep a consistent offset even for short labels
+  const valueMaxW = w - (valueX - x);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(12);
   doc.setTextColor(colors.navy[0], colors.navy[1], colors.navy[2]);
-  doc.text(primary, x + w / 2, y + 46, { align: 'center' });
 
-  // Secondary (caption)
-  if (opts.secondary) {
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.setTextColor(80);
-    doc.text(String(opts.secondary), x + w / 2, y + 66, { align: 'center' });
-  }
+  // Keep value on one line if possible, else wrap neatly.
+  const val = String(value);
+  const fits = doc.getTextWidth(val) <= valueMaxW;
+  const toDraw = fits ? val : doc.splitTextToSize(val, valueMaxW);
+  doc.text(toDraw, valueX, y);
+}
+
+function drawExecutiveSummary(doc, x, y, w, colors, vals) {
+  // Header
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.setTextColor(colors.navy[0], colors.navy[1], colors.navy[2]);
+  doc.text('Executive Summary', x, y);
+  y += 10;
+
+  // Underline
+  doc.setDrawColor(colors.line[0], colors.line[1], colors.line[2]);
+  doc.line(x, y + 6, x + w, y + 6);
+  y += 24;
+
+  // Big range figure
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(22);
+  doc.setTextColor(colors.navy[0], colors.navy[1], colors.navy[2]);
+  doc.text(vals.rangeText, x, y);
+
+  // Caption under big figure
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(90);
+  doc.text('All-in project cost', x, y + 16);
+
+  // Spacer + thin divider
+  y += 28;
+  doc.setDrawColor(colors.line[0], colors.line[1], colors.line[2]);
+  doc.line(x, y, x + w, y);
+  y += 16;
+
+  // Rows
+  drawLabelValueRow(doc, x, y, w, 'All-in $/SF', vals.psfText, colors);
+  y += 20;
+
+  // Base (single row with bullet joining the two parts)
+  const baseRow = vals.baseText + '   •   Base $/SF: ' + vals.basePsfText;
+  drawLabelValueRow(doc, x, y, w, 'Base dome shell', baseRow, colors);
+  y += 8;
+
+  return y; // return bottom Y
 }
 
 async function exportPDF(inp, est) {
@@ -1039,7 +1026,7 @@ async function exportPDF(inp, est) {
     accent: [38, 86, 138],
     headerBg: [17, 34, 64],
     headerText: [255, 255, 255],
-    kpiBg: [245, 248, 255],
+    kpiBg: [245, 248, 255], // (kept for consistency though we don't draw KPI cards now)
     muted: [110, 110, 110],
     line: [230, 234, 240]
   };
@@ -1049,7 +1036,7 @@ async function exportPDF(inp, est) {
   const margin = 44;
   const maxW = pageW - margin * 2;
 
-  /* ---- Cover ---- */
+  /* ---- Cover header ---- */
   const headerH = 92;
   doc.setFillColor(colors.headerBg[0], colors.headerBg[1], colors.headerBg[2]);
   doc.rect(0, 0, pageW, headerH, 'F');
@@ -1060,53 +1047,19 @@ async function exportPDF(inp, est) {
   doc.setTextColor(colors.headerText[0], colors.headerText[1], colors.headerText[2]);
   doc.text('ICD Cost Estimator™ — Planning Estimate', margin, 56);
 
-  // KPIs
-  const kpiY = headerH + 28;
-  const kpiH = 86;
-  const gap = 18;
-  const kpiW = (maxW - gap * 2) / 3;
+  /* ---- Executive Summary (left-aligned block) ---- */
+  const rangeText = money0(est.totals.low) + ' – ' + money0(est.totals.high);
+  const psfText   = money0(est.totals.lowPSF) + ' – ' + money0(est.totals.highPSF);
+  const baseText  = money0(est.base.structureCost);
+  const basePsfText = money0(est.totals.structurePSFout);
 
-  const rangePrimary = money0(est.totals.low) + ' – ' + money0(est.totals.high);
-  const rangeSecondary = 'All-in project cost';
+  let y = headerH + 28;
+  y = drawExecutiveSummary(doc, margin, y, maxW, colors, {
+    rangeText, psfText, baseText, basePsfText
+  });
+  y += 24;
 
-  const psfPrimary   = money0(est.totals.lowPSF) + ' – ' + money0(est.totals.highPSF);
-  const psfSecondary = 'All-in $/SF';
-
-  const basePrimary   = money0(est.base.structureCost);
-  const baseSecondary = 'Base $/SF: ' + money0(est.totals.structurePSFout);
-
-  drawKPIv2(
-    doc,
-    margin + 0 * (kpiW + gap),
-    kpiY,
-    kpiW,
-    kpiH,
-    { label: 'Estimated range', primary: rangePrimary, secondary: rangeSecondary },
-    colors
-  );
-
-  drawKPIv2(
-    doc,
-    margin + 1 * (kpiW + gap),
-    kpiY,
-    kpiW,
-    kpiH,
-    { label: '$ / SF', primary: psfPrimary, secondary: psfSecondary },
-    colors
-  );
-
-  drawKPIv2(
-    doc,
-    margin + 2 * (kpiW + gap),
-    kpiY,
-    kpiW,
-    kpiH,
-    { label: 'Base dome shell', primary: basePrimary, secondary: baseSecondary },
-    colors
-  );
-
-  // Assumptions card
-  let y = kpiY + kpiH + 28;
+  /* ---- Assumptions (unchanged except position) ---- */
   const cardR = 10;
   const colGap = 28;
   const colW = (maxW - colGap) / 2;
@@ -1119,6 +1072,7 @@ async function exportPDF(inp, est) {
   const neededH = 24 + rowsPerCol * rowH + 32;
   const cardH = Math.max(neededH, 170);
 
+  // Card background
   doc.setDrawColor(colors.line[0], colors.line[1], colors.line[2]);
   doc.setFillColor(248, 250, 252);
   doc.roundedRect(margin - 8, y - 14, maxW + 16, cardH, cardR, cardR, 'F');
@@ -1163,7 +1117,7 @@ async function exportPDF(inp, est) {
 
   drawFooter(doc);
 
-  /* ---- Breakdown page ---- */
+  /* ---- Breakdown page (unchanged) ---- */
   doc.addPage();
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
@@ -1228,7 +1182,6 @@ async function exportPDF(inp, est) {
 
   saveOrOpenPDF(doc, 'ICD-Estimate-NAVY.pdf');
 }
-
 
 /* ---------------- Wiring ---------------- */
 whenReady(['ce_region'], function () {
@@ -1412,6 +1365,12 @@ updateRangeFill($('ce_regionIdx'));
     }
   } catch (e) {}
 })();
+
+
+
+
+
+  
 
 
 
