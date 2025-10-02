@@ -385,9 +385,10 @@ function compute(inp) {
   // Basement explicit
   items.push({ cat: "Site & Foundation", name: "Basement", desc: inp.basement === 'none' ? 'None (slab only)' : inp.basement === 'partial' ? 'Partial (~50% footprint)' : 'Full (~100% footprint)', low: basementLow, high: basementHigh });
 
-  // CORE STRUCTURE (shell)
+  // CORE STRUCTURE (conditioned shell)
   items.push({ cat: "Core Structure", name: "Base Dome Shell (Airform, Foam, Rebar, Shotcrete)", desc: "Airform membrane, spray foam insulation, rebar, shotcrete structural shell (multipliers: region/domes/height/site)", low: structureCost, high: structureCost });
 
+  // Oculus / Connector
   if (inp.oculusCount > 0) {
     var oculus = lump(I.oculusCurbLumpPerEa);
     items.push({ cat: "Core Structure", name: "Oculus/Skylights Curbs", desc: inp.oculusCount + " unit" + (inp.oculusCount === 1 ? "" : "s"), low: oculus[0] * inp.oculusCount, high: oculus[1] * inp.oculusCount });
@@ -416,10 +417,10 @@ function compute(inp) {
   items.push({ cat: "Interiors", name: "Millwork, Interior Doors & Trim", desc: "Interior doors, casing/base, basic built-ins/shelving", low: mm[0] * inp.sf, high: mm[1] * inp.sf });
 
   // SYSTEMS (MEP)
-  var pl = psfMEP(I.plumbingPSF); pl[0] *= bathFactors(inp).bathPF; pl[1] *= bathFactors(inp).bathPF;
+  var pl = psfMEP(I.plumbingPSF); pl[0] *= bf.bathPF; pl[1] *= bf.bathPF;
   items.push({ cat: "Systems (MEP)", name: "Plumbing (rough-in + fixtures)", desc: "Supply/drain/vent, water heater and standard plumbing fixtures", low: pl[0] * inp.sf, high: pl[1] * inp.sf });
 
-  var el = psfMEP(I.electricalPSF); el[0] *= bathFactors(inp).bathPF; el[1] *= bathFactors(inp).bathPF;
+  var el = psfMEP(I.electricalPSF); el[0] *= bf.bathPF; el[1] *= bf.bathPF;
   items.push({ cat: "Systems (MEP)", name: "Electrical (rough-in + devices)", desc: "Service/panels, branch circuits, devices and light fixtures", low: el[0] * inp.sf, high: el[1] * inp.sf });
 
   var hv = psfMEP(I.hvacPSF);
@@ -453,13 +454,16 @@ function compute(inp) {
     optsSum += drivewayCost; optLabels.push("Driveway (~" + len + " ft)");
   }
 
-  // Non-conditioned dome(s) (garage/utility): shell + slab only
+  // --- Non-conditioned dome(s): track shell mid total for "Base dome shell (ALL)" KPI
+  var ncShellMidTotal = 0;
   if (inp.ncDomes > 0 && inp.ncSf > 0) {
     var nc = computeNCshell(inp.ncSf, regionFactor, inp.site, inp.shellThk, inp.mixType);
-    var nf = psfSite(I.foundationPSF); // slab
+    var nf = psfSite(I.foundationPSF); // slab only
     var ncFoundLow = nf[0] * inp.ncSf, ncFoundHigh = nf[1] * inp.ncSf;
-    var ncShell = { low: nc.totalMid, high: nc.totalMid }; // mid as point
-    items.push({ cat: "Non-Conditioned Domes", name: "Utility/Garage Dome Shell (x" + inp.ncDomes + ")", desc: "Shell only, no interiors/MEP", low: ncShell.low * inp.ncDomes, high: ncShell.high * inp.ncDomes });
+
+    ncShellMidTotal = nc.totalMid * inp.ncDomes;
+
+    items.push({ cat: "Non-Conditioned Domes", name: "Utility/Garage Dome Shell (x" + inp.ncDomes + ")", desc: "Shell only, no interiors/MEP", low: ncShellMidTotal, high: ncShellMidTotal });
     items.push({ cat: "Non-Conditioned Domes", name: "Utility/Garage Slab/Foundation", desc: "Simple slab foundation", low: ncFoundLow * inp.ncDomes, high: ncFoundHigh * inp.ncDomes });
   }
 
@@ -471,6 +475,15 @@ function compute(inp) {
   var low  = (preLow  + contLow  + (optsSum||0)) * (1 + CONFIG.rangeLowPct);
   var high = (preHigh + contHigh + (optsSum||0)) * (1 + CONFIG.rangeHighPct);
 
+  // --- New SF buckets + combined shell KPI numbers
+  const conditionedSF  = Math.max(+inp.sf || 0, 0);
+  const ncTotalSF      = (inp.ncDomes > 0 && inp.ncSf > 0) ? (inp.ncDomes * inp.ncSf) : 0;
+  const projectTotalSF = conditionedSF + ncTotalSF;
+
+  const structureCostAll    = structureCost + ncShellMidTotal;
+  const structurePSFout     = structureCost / Math.max(conditionedSF, 1);
+  const structurePSFoutAll  = projectTotalSF ? (structureCostAll / projectTotalSF) : 0;
+
   return {
     inp: Object.assign({}, inp, { expectedBaths: bathFactors(inp).expected }),
     parts: {
@@ -480,16 +493,22 @@ function compute(inp) {
       sitework: { low: inp.includeSitework ? siteworkLow : 0, high: inp.includeSitework ? siteworkHigh : 0, included: inp.includeSitework }
     },
     items: items,
-    base: { structureCost: structureCost, glazingCost: glazingCost, basementLow: basementLow, basementHigh: basementHigh },
+    base: { structureCost, structureCostAll, glazingCost, basementLow, basementHigh },
     totals: {
       preLow, preHigh, contLow, contHigh,
       low, high,
-      lowPSF: low / Math.max(inp.sf, 1),
-      highPSF: high / Math.max(inp.sf, 1),
-      structurePSFout: structureCost / Math.max(inp.sf, 1)
+      lowPSF: low / Math.max(conditionedSF, 1),
+      highPSF: high / Math.max(conditionedSF, 1),
+      structurePSFout,
+      structurePSFoutAll,
+      conditionedSF,
+      ncTotalSF,
+      projectTotalSF
     }
   };
 }
+
+
 
 /* ---------- Render to page ---------- */
 function render(est) {
@@ -505,23 +524,37 @@ function render(est) {
     if ($('ce_breakdown')) $('ce_breakdown').innerHTML =
       '<tr><td colspan="4" class="_muted" style="text-align:center;padding:18px">Run a calculation to see details.</td></tr>';
 
-    // Apply gates (keeps preview blur/fade even when no inputs)
     applyGates();
     return;
   }
 
+  // Totals and $/SF range
   $('ce_rangeTotal') && ($('ce_rangeTotal').textContent = money(est.totals.low) + " – " + money(est.totals.high));
   $('ce_rangePerSf') && ($('ce_rangePerSf').textContent = "$/SF: " + money(est.totals.lowPSF) + " – " + money(est.totals.highPSF));
-  $('ce_baseTotal')  && ($('ce_baseTotal').textContent  = money(est.base.structureCost));
-  $('ce_basePsf')    && ($('ce_basePsf').textContent    = "$/SF: " + money(est.totals.structurePSFout));
 
+  // Base dome shell KPI — now uses combined shell when available
+  $('ce_baseTotal') && ($('ce_baseTotal').textContent =
+    money((est.base && (est.base.structureCostAll ?? est.base.structureCost)) || 0));
+  $('ce_basePsf') && ($('ce_basePsf').textContent =
+    "$/SF: " + money((est.totals && (est.totals.structurePSFoutAll ?? est.totals.structurePSFout)) || 0));
+
+  // Sitework KPI
   var sw = est.parts.sitework;
   $('ce_siteworkTotal') && ($('ce_siteworkTotal').textContent = money(sw.low) + " – " + money(sw.high));
   $('ce_siteworkNote')  && ($('ce_siteworkNote').textContent  = sw.included ? "Included" : "Excluded");
 
+  // Assumptions text (now also shows SF buckets if available)
   var optStr = (est.parts.optLabels && est.parts.optLabels.length) ? (" • Options: " + est.parts.optLabels.join(', ')) : '';
   var basementStr = inp.basement === 'none' ? 'No basement (slab)' : inp.basement === 'partial' ? 'Partial basement (~50%)' : 'Full basement (~100%)';
   var powerText = (inp.inflationPower === 'onsite') ? 'Yes' : 'No (use generator for Airform inflation)';
+
+  var conditionedSF  = (est.totals && est.totals.conditionedSF)  || (+inp.sf || 0);
+  var ncTotalSF      = (est.totals && est.totals.ncTotalSF)      || 0;
+  var projectTotalSF = (est.totals && est.totals.projectTotalSF) || (conditionedSF + ncTotalSF);
+
+  var sfBits = " • Conditioned SF: " + conditionedSF.toLocaleString();
+  if (ncTotalSF > 0) sfBits += " • Non-conditioned SF: " + ncTotalSF.toLocaleString();
+  sfBits += " • Total project SF: " + projectTotalSF.toLocaleString();
 
   $('ce_assumptions') && ($('ce_assumptions').textContent =
     "Region " + regionLabel(est.parts.regionFactor) + " (" + est.parts.regionFactor.toFixed(2) + ")" +
@@ -542,10 +575,12 @@ function render(est) {
     " • Access: " + inp.remote +
     " • Electricity on site: " + powerText +
     (inp.ncDomes > 0 && inp.ncSf > 0 ? (" • Non-conditioned dome(s): " + inp.ncDomes + " @ " + inp.ncSf + " SF each") : "") +
+    sfBits +                    // <-- new SF summary
     " • Contingency: " + (inp.contPct * 100).toFixed(1) + "% " +
     optStr
   );
 
+  // Table rows
   var rows = [], currentCat = null;
   est.items.forEach(function (it) {
     if (it.cat !== currentCat) { currentCat = it.cat; rows.push(["— " + currentCat + " —", "", "", ""]); }
@@ -571,11 +606,9 @@ function render(est) {
     }).join('');
   }
 
-  // Apply/refresh gating (blur totals, lock sections, teaser table)
   applyGates();
 }
 
-/* ---------- Fill form from saved inputs ---------- */
 function fillFormFromInputs(inp) {
   if (!inp) return;
   function setVal(id, val) { const el = $(id); if (el) el.value = String(val); }
@@ -623,6 +656,7 @@ function fillFormFromInputs(inp) {
   updateRangeFill($('ce_regionIdx'));
   toggleDrivewayInputs();
 }
+
 
 /* ---------- Slider & small UI helpers ---------- */
 function updateRangeFill(el) {
@@ -919,12 +953,6 @@ function saveOrOpenPDF(doc, filename) {
 
 /* Build Assumptions table rows — now includes SFs at the top */
 function buildAssumptionsRows(inp, est, money0) {
-  const fmtSF = n => `${Math.max(0, Math.round(n || 0)).toLocaleString()} SF`;
-
-  const conditionedSF = Math.max(0, +inp.sf || 0);
-  const ncTotalSF = (inp.ncDomes > 0 && inp.ncSf > 0) ? (inp.ncDomes * inp.ncSf) : 0;
-  const projectTotalSF = conditionedSF + ncTotalSF;
-
   const sw = est.parts.sitework;
   const swVal = sw.included ? (money0(sw.low) + ' – ' + money0(sw.high)) : 'Excluded';
   const basement = inp.basement === 'none'
@@ -933,13 +961,11 @@ function buildAssumptionsRows(inp, est, money0) {
   const mix = inp.mixType === 'pozz' ? 'Pozzolan' : (inp.mixType === 'hemp' ? 'Hempcrete' : 'Standard');
   const height = (inp.height === 'tall' ? 'tall shell' : 'std shell');
 
-  return [
-    // NEW: Square footage basics
-    ['Conditioned SF', fmtSF(conditionedSF)],
-    ...(ncTotalSF ? [['Non-conditioned SF', fmtSF(ncTotalSF)]] : []),
-    ['Total Project SF', fmtSF(projectTotalSF)],
+  const conditionedSF  = (est.totals && est.totals.conditionedSF)  || (+inp.sf || 0);
+  const ncTotalSF      = (est.totals && est.totals.ncTotalSF)      || 0;
+  const projectTotalSF = (est.totals && est.totals.projectTotalSF) || (conditionedSF + ncTotalSF);
 
-    // Existing “project basics”
+  return [
     ['Region', regionLabel(est.parts.regionFactor) + ' (' + est.parts.regionFactor.toFixed(2) + ')'],
     ['Finish', finishLabel(+inp.finish || 1)],
     ['Glazing', ((+inp.glazing || 0) * 100).toFixed(0) + '%'],
@@ -947,6 +973,12 @@ function buildAssumptionsRows(inp, est, money0) {
     ['Shell Height', height],
     ['Bedrooms', String(inp.bedrooms || 0)],
     ['Bathrooms', String(inp.baths || 0)],
+
+    // --- New SF lines
+    ['Conditioned SF', conditionedSF.toLocaleString()],
+    ...(ncTotalSF > 0 ? [['Non-conditioned SF', ncTotalSF.toLocaleString()]] : []),
+    ['Total Project SF', projectTotalSF.toLocaleString()],
+
     ['Basement', basement],
     ['Site', inp.site],
     ['Sitework', swVal],
@@ -961,6 +993,7 @@ function buildAssumptionsRows(inp, est, money0) {
     ...(inp.ncDomes > 0 && inp.ncSf > 0 ? [['Non-conditioned domes', inp.ncDomes + ' @ ' + inp.ncSf + ' SF each']] : [])
   ];
 }
+
 
 
 /* ---------------- Export PDF (cover + breakdown) ---------------- */
@@ -1041,7 +1074,7 @@ async function exportPDF(inp, est) {
     accent: [38, 86, 138],
     headerBg: [17, 34, 64],
     headerText: [255, 255, 255],
-    kpiBg: [245, 248, 255], // (kept for consistency though we don't draw KPI cards now)
+    kpiBg: [245, 248, 255], // kept for consistency
     muted: [110, 110, 110],
     line: [230, 234, 240]
   };
@@ -1063,10 +1096,10 @@ async function exportPDF(inp, est) {
   doc.text('ICD Cost Estimator™ — Planning Estimate', margin, 56);
 
   /* ---- Executive Summary (left-aligned block) ---- */
-  const rangeText = money0(est.totals.low) + ' – ' + money0(est.totals.high);
-  const psfText   = money0(est.totals.lowPSF) + ' – ' + money0(est.totals.highPSF);
-  const baseText  = money0(est.base.structureCost);
-  const basePsfText = money0(est.totals.structurePSFout);
+  const rangeText   = money0(est.totals.low) + ' – ' + money0(est.totals.high);
+  const psfText     = money0(est.totals.lowPSF) + ' – ' + money0(est.totals.highPSF);
+  const baseText    = money0(est.base.structureCostAll ?? est.base.structureCost);
+  const basePsfText = money0(est.totals.structurePSFoutAll ?? est.totals.structurePSFout);
 
   let y = headerH + 28;
   y = drawExecutiveSummary(doc, margin, y, maxW, colors, {
@@ -1074,7 +1107,7 @@ async function exportPDF(inp, est) {
   });
   y += 24;
 
-  /* ---- Assumptions (unchanged except position) ---- */
+  /* ---- Assumptions ---- */
   const cardR = 10;
   const colGap = 28;
   const colW = (maxW - colGap) / 2;
@@ -1132,7 +1165,7 @@ async function exportPDF(inp, est) {
 
   drawFooter(doc);
 
-  /* ---- Breakdown page (unchanged) ---- */
+  /* ---- Breakdown page ---- */
   doc.addPage();
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
@@ -1197,6 +1230,7 @@ async function exportPDF(inp, est) {
 
   saveOrOpenPDF(doc, 'ICD-Estimate-NAVY.pdf');
 }
+
 
 /* ---------------- Wiring ---------------- */
 whenReady(['ce_region'], function () {
@@ -1279,15 +1313,38 @@ whenReady(['ce_clearBtn'], function () {
 whenReady(['ce_printBtn'], function () {
   $('ce_printBtn').addEventListener('click', async function () {
     var inp = lastInputs || getInputs();
-    if (!inp || !inp.sf) { alert("Enter square footage and click Calculate first."); return; }
+
+    // Allow either conditioned SF OR non-conditioned dome(s)
+    var hasCond = !!(+inp?.sf || 0);
+    var hasNC   = !!((+inp?.ncDomes || 0) > 0 && (+inp?.ncSf || 0) > 0);
+
+    if (!hasCond && !hasNC) {
+      alert("Enter some square footage (conditioned or non-conditioned) before exporting.");
+      return;
+    }
+
+    // Save state for return-from-checkout flow
     persistInputs(inp);
+
+    // Paywall
     if (!isPaid()) { openPaywall(); return; }
-    var est = lastEstimate || compute(inp);
-    if (!lastEstimate) { render(est); lastEstimate = est; lastInputs = inp; }
-    try { await exportPDF(inp, est); hideUnlockToast(); } 
-    catch (err) { console.error(err); alert('Could not create the PDF.'); }
+
+    // Always compute fresh so PDF reflects current inputs (works for garage-only too)
+    var est = compute(inp);
+    lastEstimate = est;
+    lastInputs = inp;
+
+    // (Optional) render; if sf=0, your render() safely no-ops on totals
+    try {
+      await exportPDF(inp, est);
+      hideUnlockToast();
+    } catch (err) {
+      console.error(err);
+      alert('Could not create the PDF.');
+    }
   });
 });
+
 
 /* Sticky toast button → triggers the Export button */
 whenReady(['icdce_unlocked_btn'], function () {
@@ -1380,6 +1437,12 @@ updateRangeFill($('ce_regionIdx'));
     }
   } catch (e) {}
 })();
+
+
+
+
+
+  
 
 
 
