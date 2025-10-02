@@ -1,5 +1,7 @@
 
 
+
+
 /* ===== ICD Cost Estimator — JS (Part 1/2) ===== */
 
 /* ---------- Simple DOM helpers ---------- */
@@ -1261,6 +1263,7 @@ updateRangeFill($('ce_regionIdx'));
     }
   } catch (e) {}
 })();
+
 
 
 
