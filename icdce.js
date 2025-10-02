@@ -654,12 +654,17 @@ function findPanelByAria(label) {
   }
   return null;
 }
-/* ---------- New minimal "ribbon" instead of full overlay ---------- */
+/* ---------- New "outside ribbon" helper ---------- */
 function ensureOverlay(panel, opts) {
-  // Reuse name but make it a small ribbon, not a full overlay
   if (!panel) return null;
-  let rib = panel.querySelector(':scope > .sectionLockRibbon');
-  if (!rib) {
+
+  // If there’s an old inside-the-panel ribbon from previous versions, remove it
+  const oldInside = panel.querySelector(':scope > .sectionLockRibbon');
+  if (oldInside) oldInside.remove();
+
+  // If the previous sibling is already our outside ribbon, reuse it
+  let rib = panel.previousElementSibling;
+  if (!(rib && rib.classList && rib.classList.contains('sectionLockRibbon'))) {
     rib = document.createElement('div');
     rib.className = 'sectionLockRibbon';
     rib.innerHTML = `
@@ -669,11 +674,20 @@ function ensureOverlay(panel, opts) {
       </div>
       <div class="_rSub">${(opts && opts.sub) || 'See all design + site options and export a pro PDF'}</div>
     `;
-    panel.appendChild(rib);
-    rib.querySelector('._rCTA')?.addEventListener('click', openPaywall);
+    panel.parentNode.insertBefore(rib, panel);           // <-- insert ABOVE the section
+    rib.querySelector('._rCTA')?.addEventListener('click', () => openPaywall());
+  } else {
+    // Update text if already present
+    rib.querySelector('._rTitle')?.textContent = (opts && opts.title) || 'Premium Controls';
+    rib.querySelector('._rSub')?.textContent   = (opts && opts.sub)   || 'See all design + site options and export a pro PDF';
+    const cta = rib.querySelector('._rCTA');
+    if (cta) cta.textContent = (opts && opts.cta) || 'Unlock';
   }
+
   return rib;
 }
+
+
 
 /* ---------- Lock/Unlock now disable individual controls ---------- */
 function lockPanel(panel, meta) {
@@ -703,7 +717,7 @@ function unlockPanel(panel) {
   // Restore prior disabled state
   const ctrls = panel.querySelectorAll('input, select, textarea, button');
   ctrls.forEach(el => {
-    if (el.closest('.sectionLockRibbon')) return;
+    if (el.closest('.sectionLockRibbon')) return; // skip ribbon controls if any
 
     const prev = el.getAttribute('data-prev-disabled');
     if (prev !== null) {
@@ -715,10 +729,17 @@ function unlockPanel(panel) {
     el.removeAttribute('aria-disabled');
   });
 
-  // Remove the small ribbon
-  const rib = panel.querySelector(':scope > .sectionLockRibbon');
-  if (rib) rib.remove();
+  // Remove ribbon if it was rendered INSIDE the panel (old behavior)
+  const ribInside = panel.querySelector(':scope > .sectionLockRibbon');
+  if (ribInside) ribInside.remove();
+
+  // Remove ribbon if it was rendered BEFORE (outside/above) the panel (new behavior)
+  const prev = panel.previousElementSibling;
+  if (prev && prev.classList && prev.classList.contains('sectionLockRibbon')) {
+    prev.remove();
+  }
 }
+
 function maskMoney() {
   const ids = ['ce_rangeTotal','ce_baseTotal','ce_siteworkTotal'];
   ids.forEach(id => { const el = $(id); if (el) el.classList.add('_moneyMask'); });
