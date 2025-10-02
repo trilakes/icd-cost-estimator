@@ -10,6 +10,41 @@
 
   <!-- Styles -->
   <link rel="stylesheet" href="./icdce.css" />
+
+  <!-- Compact assumptions styling (scoped) -->
+  <style>
+    /* Make the assumptions area compact key-value rows instead of chip cards */
+    #ce_assumptions_grid{
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap:6px 14px;
+      font-size:12px;
+      color:var(--text);
+      margin-top:6px;
+    }
+    #ce_assumptions_grid .assump-row{
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #ce_assumptions_grid .assump-row .label{
+      color:var(--muted);
+      font-weight:800;
+      margin-right:6px;
+    }
+    #ce_assumptions_grid .assump-row .value{
+      color:var(--text-strong);
+      font-weight:700;
+    }
+    #ce_assumptions_grid .assump-subheader{
+      grid-column:1 / -1;
+      font-size:11px;
+      font-weight:900;
+      color:var(--muted);
+      margin-top:6px;
+      letter-spacing:.02em;
+    }
+  </style>
 </head>
 <body>
 <div id="icdce">
@@ -333,7 +368,7 @@
       <!-- Hidden raw text that your main JS writes to -->
       <div id="ce_assumptions" class="_muted" style="display:none;"></div>
 
-      <!-- Pretty, structured assumptions (auto-built from raw above) -->
+      <!-- Compact list version (auto-built from raw above) -->
       <div id="ce_assumptions_grid">
         <!-- Filled dynamically -->
       </div>
@@ -378,8 +413,8 @@
 <!-- Paywall Modal -->
 <div id="icdce_paywall" class="_modalBackdrop" aria-hidden="true">
   <div class="_modal" role="dialog" aria-modal="true" aria-labelledby="pw_title">
-    <h3 id="pw_title">Export PDF</h3>
-    <p>Exporting a formatted, two-page PDF is a paid feature. Complete checkout and you’ll be returned here automatically.</p>
+    <h3 id="pw_title">Unlock Full Features</h3>
+    <p>Unlock all premium controls and features — including advanced design, site options, and PDF export. Complete checkout and you’ll be returned here automatically.</p>
     <div class="_row _actions-mobile" style="display:flex; gap:12px;">
       <button id="pw_payBtn" class="_btn _good" type="button">Go to Checkout</button>
       <button id="pw_closeBtn" class="_btn _secondary" type="button">Close</button>
@@ -387,7 +422,7 @@
 
     <div class="_divider"></div>
 
-    <p class="_hint">Already paid? Enter your access code or use a paid return link:</p>
+    <p class="_hint">Already upgraded? Enter your access code or use your return link:</p>
     <div class="_codeRow _inline">
       <input id="pw_code" class="_input" type="text" placeholder="Access code (optional)" />
       <button id="pw_apply" class="_btn _primary" type="button">Apply Code</button>
@@ -401,7 +436,7 @@
 <!-- Main JS (defer ensures DOM is parsed first; your code also uses whenReady) -->
 <script src="./icdce.js" defer></script>
 
-<!-- Assumptions → grid prettifier (updated to match new wording/fields) -->
+<!-- Assumptions → compact list prettifier -->
 <script>
 (function () {
   const raw = document.getElementById('ce_assumptions');
@@ -416,7 +451,7 @@
 
     tokens.forEach(t => {
       let m;
-      // Region (now prints "Region Standard (1.05)")
+      // Region (prints "Region Standard (1.05)" or "Region 1.05")
       if ((m = t.match(/^Region\s+(.+?)\s*\(([\d.]+)\)/i))) { data.regionLabel = m[1]; data.region = m[2]; }
       else if ((m = t.match(/^Region\s+([\d.]+)/i))) data.region = m[1];
 
@@ -447,7 +482,7 @@
       else if ((m = t.match(/^Access:\s*(.+)$/i))) data.access = titleCase(m[1]);
       else if ((m = t.match(/^Contingency:\s*([0-9.]+)%/i))) data.contingency = m[1] + '%';
 
-      // Updated power wording: "Electricity on site: Yes" or "No (use generator...)"
+      // Power wording: "Electricity on site: Yes" or "No (use generator...)"
       else if ((m = t.match(/^Electricity on site:\s*(.+)$/i))) {
         data.electricity = /yes/i.test(m[1]) ? 'Yes' : 'No — generator';
       }
@@ -460,67 +495,63 @@
     return data;
   }
 
-  function pill(label, value){
+  function row(label, value){
+    if (!value) return '';
     return (
-      '<div class="_field">' +
-        '<div class="_label" style="margin-bottom:6px;">' + label + '</div>' +
-        '<div><span class="_badge">' + (value || '—') + '</span></div>' +
+      '<div class="assump-row">' +
+        '<span class="label">' + label + ':</span>' +
+        '<span class="value">' + value + '</span>' +
       '</div>'
     );
   }
 
-  function section(title, innerHTML){
-    return (
-      '<div class="_section" style="margin-bottom:12px;">' +
-        '<div class="_sectionSubtitle" style="margin-bottom:8px;">' + title + '</div>' +
-        '<div class="_grid">' + innerHTML + '</div>' +
-      '</div>'
-    );
+  function subheader(title){
+    return '<div class="assump-subheader">' + title + '</div>';
   }
 
-  function renderGrid() {
+  function renderCompact() {
     const txt = raw ? raw.textContent.trim() : '';
     const d = parse(txt);
 
     const basics = [
-      pill('Region', d.regionLabel ? (d.regionLabel + ' (' + d.region + ')') : d.region),
-      pill('Finish', d.finish),
-      pill('Glazing', d.glazing),
-      pill('Domes', d.domes),
-      pill('Shell height', d.shellHeight),
-      pill('Bedrooms', d.bedrooms),
-      pill('Bathrooms', d.baths),
-      pill('Basement', d.basement),
-      pill('Shell thickness', d.shellThk),
-      pill('Mix', d.mix),
-      pill('Non-conditioned domes', d.nc)
+      row('Region', d.regionLabel ? (d.regionLabel + ' (' + d.region + ')') : d.region),
+      row('Finish', d.finish),
+      row('Glazing', d.glazing),
+      row('Domes', d.domes),
+      row('Shell height', d.shellHeight),
+      row('Bedrooms', d.bedrooms),
+      row('Bathrooms', d.baths),
+      row('Basement', d.basement),
+      row('Shell thickness', d.shellThk),
+      row('Mix', d.mix),
+      row('Non-conditioned domes', d.nc)
     ].join('');
 
     const site = [
-      pill('Site', d.site),
-      pill('Sitework', d.sitework),
-      pill('Connector', d.connector),
-      pill('Oculus / skylights', d.oculus),
-      pill('Access', d.access),
-      pill('Electricity on site', d.electricity)
+      row('Site', d.site),
+      row('Sitework', d.sitework),
+      row('Connector', d.connector),
+      row('Oculus / skylights', d.oculus),
+      row('Access', d.access),
+      row('Electricity on site', d.electricity)
     ].join('');
 
     const cost = [
-      pill('MEP', d.mep),
-      pill('Options', d.options),
-      pill('Contingency', d.contingency)
+      row('MEP', d.mep),
+      row('Options', d.options),
+      row('Contingency', d.contingency)
     ].join('');
 
     grid.innerHTML =
-      section('Project & Envelope', basics) +
-      section('Site & Logistics', site) +
-      section('Systems & Allowances', cost);
+      subheader('Project & Envelope') + basics +
+      subheader('Site & Logistics') + site +
+      subheader('Systems & Allowances') + cost;
   }
 
-  renderGrid();
+  renderCompact();
 
   if (raw) {
-    const mo = new MutationObserver(renderGrid);
+    const mo = new MutationObserver(renderCompact);
     mo.observe(raw, { childList: true, characterData: true, subtree: true });
   }
 })();
